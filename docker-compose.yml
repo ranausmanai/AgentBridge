@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  agentbridge:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - agentbridge-data:/app/apps/web/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+
+volumes:
+  agentbridge-data:

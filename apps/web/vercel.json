@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd ../.. && pnpm install && pnpm -r --filter='!@agentbridge/web' build && cd apps/web && pnpm build",
+  "outputDirectory": ".next",
+  "installCommand": "echo 'handled in buildCommand'",
+  "framework": "nextjs"
+}

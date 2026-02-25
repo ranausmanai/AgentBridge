@@ -1,0 +1,31 @@
+{
+  "name": "@agentbridge/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "agentbridge": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node ./dist/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agentbridge/core": "workspace:*",
+    "@agentbridge/llm": "workspace:*",
+    "@agentbridge/openapi": "workspace:*",
+    "@agentbridge/plugin-weather": "workspace:*",
+    "@agentbridge/plugin-todo": "workspace:*",
+    "chalk": "^5.3.0",
+    "ora": "^8.1.0",
+    "commander": "^12.1.0",
+    "conf": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

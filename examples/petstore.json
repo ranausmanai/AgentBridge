@@ -1,0 +1,41 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Pet Store",
+    "description": "A sample pet store API to demo AgentBridge OpenAPI import",
+    "version": "1.0.0"
+  },
+  "servers": [{ "url": "https://petstore3.swagger.io/api/v3" }],
+  "paths": {
+    "/pet/findByStatus": {
+      "get": {
+        "operationId": "findPetsByStatus",
+        "summary": "Find pets by their status (available, pending, sold)",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Status to filter by",
+            "required": true,
+            "schema": { "type": "string", "enum": ["available", "pending", "sold"] }
+          }
+        ]
+      }
+    },
+    "/pet/{petId}": {
+      "get": {
+        "operationId": "getPetById",
+        "summary": "Get a pet by its ID",
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "description": "ID of the pet",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ]
+      }
+    }
+  }
+}

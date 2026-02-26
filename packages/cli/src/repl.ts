@@ -7,6 +7,9 @@ export async function startRepl(engine: AgentBridgeEngine): Promise<void> {
   const sessionId = engine.createSession();
   const plugins = engine.getPlugins();
 
+  // In case a previous prompt (e.g. API key setup) paused stdin, resume it.
+  if (!process.stdin.destroyed) process.stdin.resume();
+
   console.log('');
   console.log(chalk.bold.cyan('  AgentBridge') + chalk.gray(' v0.1.0'));
   console.log(chalk.gray(`  Loaded plugins: ${plugins.map(p => p.name).join(', ') || 'none'}`));
@@ -35,7 +38,13 @@ export async function startRepl(engine: AgentBridgeEngine): Promise<void> {
       return;
     }
 
-    const spinner = ora({ text: 'Thinking...', color: 'cyan' }).start();
+    const spinner = ora({
+      text: 'Thinking...',
+      color: 'cyan',
+      // Keep readline stable in interactive chat; ora's default stdin handling
+      // can interfere with subsequent prompts in a REPL.
+      discardStdin: false,
+    }).start();
 
     try {
       const response = await engine.chat(sessionId, input, {

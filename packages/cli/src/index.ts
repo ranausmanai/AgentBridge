@@ -10,6 +10,8 @@ import { runInit } from './commands.js';
 import { readFileSync } from 'fs';
 
 const REGISTRY_URL = process.env.AGENTBRIDGE_REGISTRY || 'https://agentbridge.cc';
+const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
+const GROQ_DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 
 const program = new Command();
 
@@ -26,7 +28,7 @@ program
   .description('Start chatting — optionally specify an API name to auto-install from the directory')
   .option('--token <token>', 'API auth token for the target API')
   .action(async (apiName?: string, opts?: any) => {
-    const llm = createLLMProvider();
+    const llm = await createLLMProvider();
     const registry = new APIRegistry();
 
     // If user specified an API name, try to find and install it
@@ -68,9 +70,8 @@ program
     const registryPlugins = registry.toPlugins();
     const allPlugins = [...registryPlugins];
 
-    if (allPlugins.length === 2) {
-      // Only built-in plugins
-      console.log(chalk.gray('\n  No APIs installed. Using built-in weather & todo plugins.'));
+    if (allPlugins.length === 0) {
+      console.log(chalk.gray('\n  No APIs installed yet.'));
       console.log(chalk.gray('  Install an API: agentbridge chat <api-name>'));
       console.log(chalk.gray('  Or browse: agentbridge search <query>\n'));
     }
@@ -359,7 +360,7 @@ program
   });
 
 // ---- Helper ----
-function createLLMProvider() {
+async function createLLMProvider() {
   if (process.env.ANTHROPIC_API_KEY) {
     return new ClaudeProvider({
       apiKey: process.env.ANTHROPIC_API_KEY,
@@ -368,18 +369,97 @@ function createLLMProvider() {
   }
 
   if (process.env.OPENAI_API_KEY) {
+    const isGroq = process.env.OPENAI_BASE_URL === GROQ_BASE_URL;
     return new OpenAIProvider({
       apiKey: process.env.OPENAI_API_KEY,
-      model: process.env.AGENTBRIDGE_MODEL || undefined,
+      model: process.env.AGENTBRIDGE_MODEL || (isGroq ? GROQ_DEFAULT_MODEL : undefined),
       baseURL: process.env.OPENAI_BASE_URL || undefined,
     });
   }
 
-  console.error(chalk.red('No LLM API key found. Set one of:'));
-  console.error('  ANTHROPIC_API_KEY=sk-ant-...');
-  console.error('  OPENAI_API_KEY=sk-...');
-  console.error('  OPENAI_API_KEY=gsk_... OPENAI_BASE_URL=https://api.groq.com/openai/v1');
-  process.exit(1);
+  // Interactive key setup
+  const readline = await import('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q: string): Promise<string> => new Promise(resolve => rl.question(q, resolve));
+  const closePrompt = () => {
+    rl.close();
+    // Ensure stdin remains active for the REPL that starts next.
+    if (!process.stdin.destroyed) process.stdin.resume();
+  };
+
+  console.log('');
+  console.log(chalk.cyan('    ╔══════════════════════════════════════╗'));
+  console.log(chalk.cyan('    ║') + chalk.bold.white('    LLM API Key Required              ') + chalk.cyan('║'));
+  console.log(chalk.cyan('    ╚══════════════════════════════════════╝'));
+  console.log('');
+  console.log(chalk.white('    AgentBridge needs an LLM key to chat with APIs.'));
+  console.log(chalk.white('    Your key stays local — never sent to AgentBridge.'));
+  console.log('');
+  console.log(chalk.gray('    Supported providers:'));
+  console.log(`      ${chalk.cyan('1.')} Anthropic (Claude)  — ${chalk.gray('https://console.anthropic.com/settings/keys')}`);
+  console.log(`      ${chalk.cyan('2.')} OpenAI (GPT)        — ${chalk.gray('https://platform.openai.com/api-keys')}`);
+  console.log(`      ${chalk.cyan('3.')} Groq (fast & free)  — ${chalk.gray('https://console.groq.com/keys')}`);
+  console.log('');
+
+  const choice = await ask(chalk.white('    Choose provider (1/2/3): '));
+  console.log('');
+
+  if (choice === '1') {
+    const key = await ask(chalk.white('    Anthropic API key: '));
+    closePrompt();
+    if (!key.trim()) {
+      console.log(chalk.red('    No key provided.'));
+      process.exit(1);
+    }
+    process.env.ANTHROPIC_API_KEY = key.trim();
+    console.log('');
+    console.log(chalk.green('    ✔ Key set for this session'));
+    console.log(chalk.gray('    To persist, add to your shell profile:'));
+    console.log(chalk.gray(`    export ANTHROPIC_API_KEY=${key.trim().slice(0, 10)}...`));
+    console.log('');
+    return new ClaudeProvider({
+      apiKey: key.trim(),
+      model: process.env.AGENTBRIDGE_MODEL || undefined,
+    });
+  } else if (choice === '2') {
+    const key = await ask(chalk.white('    OpenAI API key: '));
+    closePrompt();
+    if (!key.trim()) {
+      console.log(chalk.red('    No key provided.'));
+      process.exit(1);
+    }
+    console.log('');
+    console.log(chalk.green('    ✔ Key set for this session'));
+    console.log(chalk.gray('    To persist, add to your shell profile:'));
+    console.log(chalk.gray(`    export OPENAI_API_KEY=${key.trim().slice(0, 10)}...`));
+    console.log('');
+    return new OpenAIProvider({
+      apiKey: key.trim(),
+      model: process.env.AGENTBRIDGE_MODEL || undefined,
+    });
+  } else if (choice === '3') {
+    const key = await ask(chalk.white('    Groq API key: '));
+    closePrompt();
+    if (!key.trim()) {
+      console.log(chalk.red('    No key provided.'));
+      process.exit(1);
+    }
+    console.log('');
+    console.log(chalk.green('    ✔ Key set for this session'));
+    console.log(chalk.gray('    To persist, add to your shell profile:'));
+    console.log(chalk.gray(`    export OPENAI_API_KEY=${key.trim().slice(0, 10)}...`));
+    console.log(chalk.gray('    export OPENAI_BASE_URL=https://api.groq.com/openai/v1'));
+    console.log('');
+    return new OpenAIProvider({
+      apiKey: key.trim(),
+      model: process.env.AGENTBRIDGE_MODEL || GROQ_DEFAULT_MODEL,
+      baseURL: GROQ_BASE_URL,
+    });
+  } else {
+    closePrompt();
+    console.log(chalk.red('    Invalid choice.'));
+    process.exit(1);
+  }
 }
 
 program.parse();

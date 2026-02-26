@@ -136,6 +136,7 @@ program
   .command('publish [file]')
   .description('Publish your API to the AgentBridge directory (agentbridge.cc)')
   .option('--url <url>', 'URL to your OpenAPI spec (instead of local file)')
+  .option('--private', 'Do not list on the public directory')
   .option('--registry <url>', 'Custom registry URL')
   .action(async (file?: string, opts?: any) => {
     const registryUrl = opts?.registry || REGISTRY_URL;
@@ -178,7 +179,7 @@ program
       const res = await fetch(`${registryUrl}/api/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, is_public: !opts?.private }),
       });
 
       const data = await res.json();
@@ -189,7 +190,7 @@ program
       }
 
       console.log('');
-      console.log(chalk.green.bold(`  Published: ${data.name}`));
+      console.log(chalk.green.bold(`  Published${opts?.private ? ' (private)' : ''}: ${data.name}`));
       console.log(chalk.gray(`  ${data.description}`));
       console.log(chalk.gray(`  ${data.action_count} actions registered`));
       console.log('');
@@ -200,6 +201,16 @@ program
       console.log(chalk.gray(`    Web:  ${registryUrl}/chat`));
       console.log(chalk.gray(`    CLI:  agentbridge chat ${data.name}`));
       console.log(chalk.gray(`    SDK:  fetch("${registryUrl}/api/${data.name}/manifest")`));
+      console.log('');
+      console.log(chalk.white('  MCP (Claude Desktop / Cursor / Windsurf):'));
+      console.log(chalk.gray(`    {`));
+      console.log(chalk.gray(`      "mcpServers": {`));
+      console.log(chalk.gray(`        "${data.name}": {`));
+      console.log(chalk.gray(`          "command": "npx",`));
+      console.log(chalk.gray(`          "args": ["@agentbridgeai/mcp", "--api", "${data.name}"]`));
+      console.log(chalk.gray(`        }`));
+      console.log(chalk.gray(`      }`));
+      console.log(chalk.gray(`    }`));
       console.log('');
     } catch (err: any) {
       console.error(chalk.red(`  Publish failed: ${err.message}`));
@@ -341,8 +352,10 @@ program
 program
   .command('init')
   .description('Generate .agentbridge.json from your OpenAPI spec (local only, use "publish" for directory)')
-  .action(async () => {
-    await runInit();
+  .option('-y, --yes', 'Skip prompts, use defaults')
+  .option('--spec <path>', 'Path or URL to OpenAPI spec')
+  .action(async (opts?: any) => {
+    await runInit({ yes: opts?.yes, spec: opts?.spec });
   });
 
 // ---- Helper ----

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getApiByName } from '@/lib/db';
+import { getApiByName, trackEvent } from '@/lib/db';
+import { createHash } from 'crypto';
 
 /**
  * Returns the raw AgentBridge manifest for an API.
@@ -10,7 +11,7 @@ import { getApiByName } from '@/lib/db';
  * Returns the .agentbridge.json format directly.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ name: string }> },
 ) {
   const { name } = await params;
@@ -21,6 +22,12 @@ export async function GET(
   }
 
   const manifest = JSON.parse(api.manifest);
+
+  // Track manifest fetch
+  const ua = request.headers.get('user-agent') ?? undefined;
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ipHash = createHash('sha256').update(ip).digest('hex').slice(0, 16);
+  trackEvent(name, 'manifest_fetch', undefined, ua, ipHash);
 
   return NextResponse.json(manifest, {
     headers: {

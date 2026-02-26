@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { getDb, trackEvent } from '@/lib/db';
 
 /**
  * Discovery API — agents query this to find APIs by capability.
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     FROM apis a
     LEFT JOIN api_actions aa ON aa.api_id = a.id
   `;
-  const conditions: string[] = [];
+  const conditions: string[] = ['a.is_public = 1'];
   const params: any[] = [];
 
   if (q) {
@@ -78,6 +78,9 @@ export async function GET(request: Request) {
       manifest_url: row.source_url ?? null,
     };
   });
+
+  // Track discover hits
+  for (const api of apis) trackEvent(api.name, 'discover_hit');
 
   return NextResponse.json({
     count: apis.length,

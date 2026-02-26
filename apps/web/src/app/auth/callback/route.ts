@@ -12,6 +12,10 @@ export async function GET(request: Request) {
   const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'agentbridge.cc';
   const origin = `${forwardedProto}://${forwardedHost}`;
 
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return NextResponse.redirect(`${origin}/login`);
+  }
+
   if (code) {
     const cookieStore = await cookies();
     const supabase = createServerClient(

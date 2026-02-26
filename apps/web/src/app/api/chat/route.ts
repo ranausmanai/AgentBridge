@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getApiByName } from '@/lib/db';
+import { getApiByName, trackEvent } from '@/lib/db';
 import { createEngine, type LLMProviderType } from '@/lib/bridge';
 import type { AgentBridgeManifest } from '@agentbridgeai/openapi';
 
@@ -77,6 +77,13 @@ export async function POST(request: Request) {
         },
       });
 
+      // Track usage
+      for (const name of apis) trackEvent(name, 'chat_use');
+      for (const tc of toolCalls) {
+        const [apiName, actionId] = tc.action.split('.');
+        if (apiName) trackEvent(apiName, 'action_call', actionId);
+      }
+
       return NextResponse.json({
         response,
         sessionId: newSessionId,
@@ -94,6 +101,13 @@ export async function POST(request: Request) {
         });
       },
     });
+
+    // Track usage
+    for (const name of apis) trackEvent(name, 'chat_use');
+    for (const tc of toolCalls) {
+      const [apiName, actionId] = tc.action.split('.');
+      if (apiName) trackEvent(apiName, 'action_call', actionId);
+    }
 
     return NextResponse.json({
       response,

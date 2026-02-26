@@ -140,14 +140,14 @@ export default function ChatPage() {
     return (
       <div className="max-w-xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">Chat with APIs</h1>
-        <p className="text-gray-400 mb-8">
+        <p className="text-[var(--text-secondary)] mb-8">
           Talk to any registered API using natural language. Bring your own LLM key — we never store it.
         </p>
 
         {/* Step 1: LLM Provider + Key (combined) */}
         <div className="mb-6">
-          <label className="block text-sm text-gray-400 mb-2">
-            <span className="bg-cyan-500/20 text-cyan-400 text-xs px-2 py-0.5 rounded mr-2">1</span>
+          <label className="block text-sm text-[var(--text-secondary)] mb-2">
+            <span className="bg-[var(--accent-soft)] text-[var(--accent)] text-xs px-2 py-0.5 rounded mr-2">1</span>
             LLM Provider &amp; Key
           </label>
           <div className="flex gap-2 mb-3">
@@ -156,7 +156,7 @@ export default function ChatPage() {
                 key={p.id}
                 onClick={() => setProvider(p.id)}
                 className={`px-4 py-2 rounded-lg text-sm transition ${
-                  provider === p.id ? 'bg-cyan-500 text-black font-medium' : 'bg-gray-800 text-gray-400 hover:text-white'
+                  provider === p.id ? 'bg-[var(--accent)] text-black font-medium' : 'bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 {p.label}
@@ -168,23 +168,23 @@ export default function ChatPage() {
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
             placeholder={currentProvider?.placeholder}
-            className="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-gray-300 placeholder-gray-600 focus:border-cyan-500 focus:outline-none"
+            className="w-full bg-[var(--bg-input)] border border-[var(--border-hover)] rounded-xl p-3 text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
           />
-          <p className="text-xs text-gray-600 mt-1">
+          <p className="text-xs text-[var(--text-muted)] mt-1">
             {currentProvider?.hint} — stored in your browser only.
           </p>
         </div>
 
         {/* Step 2: Select APIs */}
         <div className="mb-6">
-          <label className="block text-sm text-gray-400 mb-2">
-            <span className="bg-cyan-500/20 text-cyan-400 text-xs px-2 py-0.5 rounded mr-2">2</span>
+          <label className="block text-sm text-[var(--text-secondary)] mb-2">
+            <span className="bg-[var(--accent-soft)] text-[var(--accent)] text-xs px-2 py-0.5 rounded mr-2">2</span>
             Select APIs to chat with
           </label>
           {apis.length === 0 ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
-              <p className="text-gray-500 text-sm mb-2">No APIs registered yet.</p>
-              <a href="/register" className="text-cyan-400 hover:text-cyan-300 text-sm">
+            <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl p-6 text-center">
+              <p className="text-[var(--text-muted)] text-sm mb-2">No APIs registered yet.</p>
+              <a href="/register" className="text-[var(--accent)] hover:text-[var(--accent-hover)] text-sm">
                 Register your first API &rarr;
               </a>
             </div>
@@ -194,24 +194,24 @@ export default function ChatPage() {
                 <label
                   key={api.name}
                   className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
-                    selectedApis.has(api.name) ? 'border-cyan-500 bg-cyan-500/10' : 'border-gray-700 bg-gray-900 hover:border-gray-600'
+                    selectedApis.has(api.name) ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--border-hover)] bg-[var(--bg-surface)] hover:border-[var(--text-muted)]'
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={selectedApis.has(api.name)}
                     onChange={() => toggleApi(api.name)}
-                    className="accent-cyan-500"
+                    className="accent-[var(--accent)]"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-white font-medium">{api.name}</span>
-                      <span className="text-gray-500 text-xs">{api.action_count} actions</span>
+                      <span className="text-[var(--text-primary)] font-medium">{api.name}</span>
+                      <span className="text-[var(--text-muted)] text-xs">{api.action_count} actions</span>
                       {api.auth_type && api.auth_type !== 'none' && (
-                        <span className="text-xs bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">{api.auth_type}</span>
+                        <span className="text-xs bg-[var(--warning-bg)] text-[var(--warning-text)] px-1.5 py-0.5 rounded">{api.auth_type}</span>
                       )}
                     </div>
-                    <p className="text-gray-400 text-xs mt-0.5">{api.description}</p>
+                    <p className="text-[var(--text-secondary)] text-xs mt-0.5">{api.description}</p>
                   </div>
                 </label>
               ))}
@@ -222,19 +222,19 @@ export default function ChatPage() {
         {/* Step 3: API credentials (only if needed) */}
         {apisNeedingAuth.length > 0 && (
           <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-2">
-              <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-0.5 rounded mr-2">3</span>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">
+              <span className="bg-[var(--warning-bg)] text-[var(--warning-text)] text-xs px-2 py-0.5 rounded mr-2">3</span>
               API Credentials
             </label>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-xs text-[var(--text-muted)] mb-3">
               These APIs require authentication to make real calls.
             </p>
             <div className="space-y-3">
               {apisNeedingAuth.map(api => (
-                <div key={api.name} className="bg-gray-900 border border-gray-700 rounded-lg p-3">
+                <div key={api.name} className="bg-[var(--bg-surface)] border border-[var(--border-hover)] rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-white text-sm font-medium">{api.name}</span>
-                    <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">
+                    <span className="text-[var(--text-primary)] text-sm font-medium">{api.name}</span>
+                    <span className="text-xs bg-[var(--warning-bg)] text-[var(--warning-text)] px-2 py-0.5 rounded">
                       {api.auth_type}
                     </span>
                   </div>
@@ -243,7 +243,7 @@ export default function ChatPage() {
                     value={apiCredentials[api.name] || ''}
                     onChange={e => setApiCredentials(prev => ({ ...prev, [api.name]: e.target.value }))}
                     placeholder={api.auth_type === 'bearer' ? 'Bearer token...' : 'API key...'}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-lg p-2 text-gray-300 text-sm placeholder-gray-600 focus:border-cyan-500 focus:outline-none"
+                    className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
                   />
                 </div>
               ))}
@@ -254,7 +254,7 @@ export default function ChatPage() {
         <button
           onClick={handleConfigure}
           disabled={!apiKey.trim() || selectedApis.size === 0}
-          className="bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-semibold px-8 py-3 rounded-lg transition w-full"
+          className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold px-8 py-3 rounded-lg transition w-full"
         >
           Start Chatting
         </button>
@@ -268,17 +268,17 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-65px)]">
       {/* Header */}
-      <div className="border-b border-gray-800 px-6 py-3 flex items-center justify-between bg-gray-900/50">
-        <div className="text-sm text-gray-400">
+      <div className="border-b border-[var(--border)] px-6 py-3 flex items-center justify-between bg-[var(--bg-surface)]/80 backdrop-blur-sm">
+        <div className="text-sm text-[var(--text-secondary)]">
           Chatting with: {selectedApiNames.map(name => (
-            <span key={name} className="inline-block bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded text-xs ml-1">
+            <span key={name} className="inline-block bg-[var(--accent-soft)] text-[var(--accent)] px-2 py-0.5 rounded text-xs ml-1">
               {name}
             </span>
           ))}
         </div>
         <button
           onClick={() => { setConfigured(false); setMessages([]); setSessionId(undefined); }}
-          className="text-xs text-gray-500 hover:text-gray-300"
+          className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
         >
           Change settings
         </button>
@@ -287,9 +287,9 @@ export default function ChatPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
         {messages.length === 0 && (
-          <div className="text-center text-gray-500 mt-16">
+          <div className="text-center text-[var(--text-muted)] mt-16">
             <p className="text-lg mb-4">What would you like to do?</p>
-            <p className="text-sm mb-6 text-gray-600">
+            <p className="text-sm mb-6 text-[var(--text-muted)]">
               You&apos;re connected to {selectedApiNames.join(', ')}. Try one of these:
             </p>
             <div className="flex flex-wrap gap-2 justify-center max-w-lg mx-auto">
@@ -299,7 +299,7 @@ export default function ChatPage() {
                   <button
                     key={`${name}-${i}`}
                     onClick={() => sendMessage(s)}
-                    className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-cyan-500/50 text-gray-300 text-sm px-4 py-2 rounded-lg transition"
+                    className="bg-[var(--bg-surface-hover)] hover:bg-[var(--bg-surface)] border border-[var(--border-hover)] hover:border-[var(--accent)]/50 text-[var(--text-secondary)] text-sm px-4 py-2 rounded-lg transition"
                   >
                     {s}
                   </button>
@@ -312,14 +312,14 @@ export default function ChatPage() {
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-2xl rounded-2xl px-4 py-3 ${
               msg.role === 'user'
-                ? 'bg-cyan-500 text-black'
-                : 'bg-gray-800 text-gray-200'
+                ? 'bg-[var(--accent)] text-black'
+                : 'bg-[var(--bg-surface-hover)] text-[var(--text-primary)]'
             }`}>
               <p className="whitespace-pre-wrap">{msg.content}</p>
               {msg.toolCalls && msg.toolCalls.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-gray-700/50">
+                <div className="mt-2 pt-2 border-t border-[var(--border)]">
                   {msg.toolCalls.map((tc, j) => (
-                    <p key={j} className="text-xs text-gray-400 font-mono">
+                    <p key={j} className="text-xs text-[var(--text-secondary)] font-mono">
                       Called: {tc.action}({JSON.stringify(tc.params).slice(0, 60)})
                     </p>
                   ))}
@@ -330,7 +330,7 @@ export default function ChatPage() {
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-gray-800 rounded-2xl px-4 py-3 text-gray-400">
+            <div className="bg-[var(--bg-surface-hover)] rounded-2xl px-4 py-3 text-[var(--text-secondary)]">
               <span className="animate-pulse">Thinking...</span>
             </div>
           </div>
@@ -339,20 +339,20 @@ export default function ChatPage() {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="border-t border-gray-800 px-6 py-4 bg-gray-900/50">
+      <form onSubmit={handleSend} className="border-t border-[var(--border)] px-6 py-4 bg-[var(--bg-surface)]/80 backdrop-blur-sm">
         <div className="flex gap-3 max-w-4xl mx-auto">
           <input
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-200 placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
+            className="flex-1 bg-[var(--bg-surface-hover)] border border-[var(--border-hover)] rounded-xl px-4 py-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
             autoFocus
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-black font-medium px-6 py-3 rounded-xl transition"
+            className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-black font-medium px-6 py-3 rounded-xl transition"
           >
             Send
           </button>

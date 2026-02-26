@@ -1,7 +1,10 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { isAuthEnabled } from './client';
 
 export async function createServerSupabase() {
+  if (!isAuthEnabled()) return null;
+
   const cookieStore = await cookies();
 
   return createServerClient(

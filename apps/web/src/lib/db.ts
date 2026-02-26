@@ -31,6 +31,7 @@ function initSchema(db: Database.Database) {
       tags TEXT DEFAULT '',
       category TEXT DEFAULT 'other',
       is_verified INTEGER DEFAULT 0,
+      is_public INTEGER DEFAULT 1,
       owner_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -52,6 +53,28 @@ function initSchema(db: Database.Database) {
   } catch {
     // Column already exists
   }
+
+  // Add is_public column if missing (migration for existing DBs)
+  try {
+    db.exec('ALTER TABLE apis ADD COLUMN is_public INTEGER DEFAULT 1');
+  } catch {
+    // Column already exists
+  }
+
+  // Analytics events table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS api_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      api_name TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      action_id TEXT,
+      user_agent TEXT,
+      ip_hash TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_events_name ON api_events(api_name);
+    CREATE INDEX IF NOT EXISTS idx_api_events_created ON api_events(created_at);
+  `);
 }
 
 export interface ApiRow {
@@ -65,6 +88,7 @@ export interface ApiRow {
   manifest: string;
   openapi_spec: string | null;
   owner_id: string | null;
+  is_public: number;
   created_at: string;
   updated_at: string;
 }
@@ -80,6 +104,10 @@ export interface ApiActionRow {
 
 export function getAllApis(): ApiRow[] {
   return getDb().prepare('SELECT * FROM apis ORDER BY created_at DESC').all() as ApiRow[];
+}
+
+export function getAllPublicApis(): ApiRow[] {
+  return getDb().prepare('SELECT * FROM apis WHERE is_public = 1 ORDER BY created_at DESC').all() as ApiRow[];
 }
 
 export function getApiByName(name: string): ApiRow | undefined {
@@ -104,12 +132,13 @@ export function insertApi(data: {
   manifest: string;
   openapi_spec: string | null;
   owner_id?: string;
+  is_public?: boolean;
   actions: { action_id: string; description: string; method: string; path: string }[];
 }) {
   const db = getDb();
   const insertApiStmt = db.prepare(`
-    INSERT INTO apis (name, description, version, base_url, auth_type, auth_config, manifest, openapi_spec, owner_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO apis (name, description, version, base_url, auth_type, auth_config, manifest, openapi_spec, owner_id, is_public)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertActionStmt = db.prepare(`
     INSERT INTO api_actions (api_id, action_id, description, method, path)
@@ -131,6 +160,7 @@ export function insertApi(data: {
       data.name, data.description, data.version, data.base_url,
       data.auth_type, data.auth_config, data.manifest, data.openapi_spec,
       data.owner_id ?? null,
+      data.is_public === false ? 0 : 1,
     );
     const apiId = result.lastInsertRowid as number;
 
@@ -153,4 +183,114 @@ export function deleteApi(name: string, ownerId?: string) {
   }
   db.prepare('DELETE FROM api_actions WHERE api_id = ?').run(api.id);
   db.prepare('DELETE FROM apis WHERE id = ?').run(api.id);
+}
+
+// ---- Analytics ----
+
+export function trackEvent(
+  apiName: string,
+  eventType: string,
+  actionId?: string,
+  userAgent?: string,
+  ipHash?: string,
+) {
+  try {
+    getDb().prepare(
+      'INSERT INTO api_events (api_name, event_type, action_id, user_agent, ip_hash) VALUES (?, ?, ?, ?, ?)',
+    ).run(apiName, eventType, actionId ?? null, userAgent ?? null, ipHash ?? null);
+  } catch {
+    // Never let tracking break the request
+  }
+}
+
+export function getAllStats(days = 30) {
+  const db = getDb();
+  const apis = getAllApis();
+  if (apis.length === 0) return { apis: [], totals: { manifest_fetches: 0, chat_uses: 0, action_calls: 0, discover_hits: 0 } };
+
+  const names = apis.map(a => a.name);
+  return computeStats(db, apis, names, days);
+}
+
+export function getOwnerStats(ownerId: string, days = 30) {
+  const db = getDb();
+  const apis = getApisByOwner(ownerId);
+  if (apis.length === 0) return { apis: [], totals: { manifest_fetches: 0, chat_uses: 0, action_calls: 0, discover_hits: 0 } };
+
+  const names = apis.map(a => a.name);
+  return computeStats(db, apis, names, days);
+}
+
+function computeStats(db: Database.Database, apis: ApiRow[], names: string[], days: number) {
+  const placeholders = names.map(() => '?').join(',');
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+
+  // Aggregate counts per API
+  const stats = db.prepare(`
+    SELECT api_name, event_type, COUNT(*) as count
+    FROM api_events
+    WHERE api_name IN (${placeholders}) AND created_at >= ?
+    GROUP BY api_name, event_type
+  `).all(...names, cutoff) as { api_name: string; event_type: string; count: number }[];
+
+  // Top actions per API
+  const topActions = db.prepare(`
+    SELECT api_name, action_id, COUNT(*) as count
+    FROM api_events
+    WHERE api_name IN (${placeholders}) AND event_type = 'action_call' AND action_id IS NOT NULL AND created_at >= ?
+    GROUP BY api_name, action_id
+    ORDER BY count DESC
+  `).all(...names, cutoff) as { api_name: string; action_id: string; count: number }[];
+
+  // Daily timeseries
+  const timeseries = db.prepare(`
+    SELECT api_name, DATE(created_at) as date, event_type, COUNT(*) as count
+    FROM api_events
+    WHERE api_name IN (${placeholders}) AND created_at >= ?
+    GROUP BY api_name, DATE(created_at), event_type
+    ORDER BY date
+  `).all(...names, cutoff) as { api_name: string; date: string; event_type: string; count: number }[];
+
+  const totals = { manifest_fetches: 0, chat_uses: 0, action_calls: 0, discover_hits: 0 };
+
+  const apiStats = apis.map(api => {
+    const apiEvents = stats.filter(s => s.api_name === api.name);
+    const counts = {
+      manifest_fetches: 0, chat_uses: 0, action_calls: 0, discover_hits: 0,
+    };
+    for (const e of apiEvents) {
+      if (e.event_type === 'manifest_fetch') counts.manifest_fetches = e.count;
+      if (e.event_type === 'chat_use') counts.chat_uses = e.count;
+      if (e.event_type === 'action_call') counts.action_calls = e.count;
+      if (e.event_type === 'discover_hit') counts.discover_hits = e.count;
+    }
+    totals.manifest_fetches += counts.manifest_fetches;
+    totals.chat_uses += counts.chat_uses;
+    totals.action_calls += counts.action_calls;
+    totals.discover_hits += counts.discover_hits;
+
+    const apiTopActions = topActions
+      .filter(a => a.api_name === api.name)
+      .slice(0, 5)
+      .map(a => ({ action_id: a.action_id, count: a.count }));
+
+    // Build timeseries map
+    const tsMap = new Map<string, { manifest_fetch: number; chat_use: number; action_call: number; discover_hit: number }>();
+    for (const t of timeseries.filter(t => t.api_name === api.name)) {
+      if (!tsMap.has(t.date)) tsMap.set(t.date, { manifest_fetch: 0, chat_use: 0, action_call: 0, discover_hit: 0 });
+      const entry = tsMap.get(t.date)!;
+      if (t.event_type in entry) (entry as any)[t.event_type] = t.count;
+    }
+    const ts = Array.from(tsMap.entries()).map(([date, counts]) => ({ date, ...counts }));
+
+    return {
+      name: api.name,
+      description: api.description,
+      ...counts,
+      top_actions: apiTopActions,
+      timeseries: ts,
+    };
+  });
+
+  return { apis: apiStats, totals };
 }

@@ -36,11 +36,11 @@ ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 # Build packages in dependency order, then Next.js app
-RUN pnpm --filter @agentbridge/core build && \
-    pnpm --filter @agentbridge/llm build && \
-    pnpm --filter @agentbridge/openapi build && \
-    pnpm --filter @agentbridge/sdk build && \
-    pnpm --filter @agentbridge/web build
+RUN pnpm --filter @agentbridgeai/core build && \
+    pnpm --filter @agentbridgeai/llm build && \
+    pnpm --filter @agentbridgeai/openapi build && \
+    pnpm --filter @agentbridgeai/sdk build && \
+    pnpm --filter @agentbridgeai/web build
 
 # ---- Production image ----
 FROM node:22-alpine AS runner

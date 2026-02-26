@@ -1,1 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+
+:root {
+  --bg: #ffffff;
+  --bg-surface: #f9fafb;
+  --bg-surface-hover: #f3f4f6;
+  --bg-input: #ffffff;
+  --bg-inset: #f3f4f6;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --border: #e5e7eb;
+  --border-hover: #d1d5db;
+  --accent: #06b6d4;
+  --accent-hover: #22d3ee;
+  --accent-soft: rgba(6, 182, 212, 0.08);
+  --accent-text: #0e7490;
+  --success-bg: rgba(5, 150, 105, 0.08);
+  --success-border: #6ee7b7;
+  --success-text: #059669;
+  --error-bg: rgba(220, 38, 38, 0.08);
+  --error-border: #fca5a5;
+  --error-text: #dc2626;
+  --warning-bg: rgba(234, 179, 8, 0.08);
+  --warning-text: #ca8a04;
+}
+
+.dark {
+  --bg: #030712;
+  --bg-surface: #111827;
+  --bg-surface-hover: #1f2937;
+  --bg-input: #111827;
+  --bg-inset: #0a0f1a;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --border: #1f2937;
+  --border-hover: #374151;
+  --accent: #06b6d4;
+  --accent-hover: #22d3ee;
+  --accent-soft: rgba(6, 182, 212, 0.1);
+  --accent-text: #22d3ee;
+  --success-bg: rgba(6, 78, 59, 0.3);
+  --success-border: #065f46;
+  --success-text: #6ee7b7;
+  --error-bg: rgba(127, 29, 29, 0.3);
+  --error-border: #991b1b;
+  --error-text: #fca5a5;
+  --warning-bg: rgba(113, 63, 18, 0.3);
+  --warning-text: #fbbf24;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

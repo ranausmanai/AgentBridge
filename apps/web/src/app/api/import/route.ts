@@ -5,6 +5,9 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 async function getUser() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return null;
+  }
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,7 +28,7 @@ async function getUser() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { spec, url } = body as { spec?: string; url?: string };
+    const { spec, url, is_public } = body as { spec?: string; url?: string; is_public?: boolean };
 
     // Get authenticated user (optional for CLI/API usage, required for web)
     const user = await getUser();
@@ -62,6 +65,7 @@ export async function POST(request: Request) {
       manifest: JSON.stringify(manifest),
       openapi_spec: specContent,
       owner_id: user?.id,
+      is_public: is_public !== false,
       actions: manifest.actions.map(a => ({
         action_id: a.id,
         description: a.description,

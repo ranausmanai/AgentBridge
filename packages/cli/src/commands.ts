@@ -11,14 +11,15 @@ function ask(rl: readline.Interface, question: string): Promise<string> {
  * Interactive init command: guides API owners through making their API agent-ready.
  *
  *   npx agentbridge init
+ *   npx agentbridge init -y --spec openapi.json
  *
  * 1. Ask for OpenAPI spec (file path or URL)
  * 2. Parse and preview actions
  * 3. Generate .agentbridge.json manifest
  * 4. Optionally generate MCP server config
  */
-export async function runInit() {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+export async function runInit(opts?: { yes?: boolean; spec?: string }) {
+  const nonInteractive = opts?.yes;
 
   console.log('');
   console.log(chalk.bold.cyan('  AgentBridge Init'));
@@ -26,7 +27,29 @@ export async function runInit() {
   console.log('');
 
   // Step 1: Get the OpenAPI spec
-  const specSource = await ask(rl, chalk.white('  Path to your OpenAPI spec (or URL): '));
+  let specSource = opts?.spec;
+
+  if (!specSource && nonInteractive) {
+    // Auto-detect spec file
+    const candidates = ['openapi.json', 'openapi.yaml', 'openapi.yml', 'swagger.json', 'swagger.yaml'];
+    for (const c of candidates) {
+      if (existsSync(c)) {
+        specSource = c;
+        console.log(chalk.gray(`  Auto-detected: ${c}`));
+        break;
+      }
+    }
+    if (!specSource) {
+      console.error(chalk.red('  No OpenAPI spec found. Provide --spec <path>'));
+      return;
+    }
+  }
+
+  if (!specSource) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    specSource = await ask(rl, chalk.white('  Path to your OpenAPI spec (or URL): '));
+    rl.close();
+  }
 
   let specContent: string;
   try {
@@ -39,12 +62,10 @@ export async function runInit() {
       specContent = readFileSync(specSource, 'utf-8');
     } else {
       console.error(chalk.red(`  File not found: ${specSource}`));
-      rl.close();
       return;
     }
   } catch (err: any) {
     console.error(chalk.red(`  Failed to load spec: ${err.message}`));
-    rl.close();
     return;
   }
 
@@ -54,7 +75,6 @@ export async function runInit() {
     manifest = convertOpenAPIToManifest(specContent);
   } catch (err: any) {
     console.error(chalk.red(`  Failed to parse spec: ${err.message}`));
-    rl.close();
     return;
   }
 
@@ -74,21 +94,12 @@ export async function runInit() {
   }
   console.log('');
 
-  // Step 3: Confirm and save
-  const confirm = await ask(rl, chalk.white('  Generate .agentbridge.json? (Y/n): '));
-  if (confirm.toLowerCase() === 'n') {
-    console.log(chalk.gray('  Cancelled.'));
-    rl.close();
-    return;
-  }
+  if (nonInteractive) {
+    // Auto-generate both files
+    const manifestPath = '.agentbridge.json';
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log(chalk.green(`  Created ${manifestPath}`));
 
-  const manifestPath = '.agentbridge.json';
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-  console.log(chalk.green(`  Created ${manifestPath}`));
-
-  // Step 4: MCP config
-  const mcpAnswer = await ask(rl, chalk.white('  Generate MCP server config for Claude/Cursor? (Y/n): '));
-  if (mcpAnswer.toLowerCase() !== 'n') {
     const mcpConfig = {
       mcpServers: {
         [manifest.name]: {
@@ -97,13 +108,45 @@ export async function runInit() {
         },
       },
     };
-
     const mcpPath = 'mcp-config.json';
     writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2));
     console.log(chalk.green(`  Created ${mcpPath}`));
-    console.log('');
-    console.log(chalk.gray('  To use with Claude Desktop, add the config to:'));
-    console.log(chalk.gray('  ~/.claude/claude_desktop_config.json'));
+  } else {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+    // Step 3: Confirm and save
+    const confirm = await ask(rl, chalk.white('  Generate .agentbridge.json? (Y/n): '));
+    if (confirm.toLowerCase() === 'n') {
+      console.log(chalk.gray('  Cancelled.'));
+      rl.close();
+      return;
+    }
+
+    const manifestPath = '.agentbridge.json';
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log(chalk.green(`  Created ${manifestPath}`));
+
+    // Step 4: MCP config
+    const mcpAnswer = await ask(rl, chalk.white('  Generate MCP server config for Claude/Cursor? (Y/n): '));
+    if (mcpAnswer.toLowerCase() !== 'n') {
+      const mcpConfig = {
+        mcpServers: {
+          [manifest.name]: {
+            command: 'npx',
+            args: ['@agentbridgeai/mcp', '--manifest', './.agentbridge.json'],
+          },
+        },
+      };
+
+      const mcpPath = 'mcp-config.json';
+      writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2));
+      console.log(chalk.green(`  Created ${mcpPath}`));
+      console.log('');
+      console.log(chalk.gray('  To use with Claude Desktop, add the config to:'));
+      console.log(chalk.gray('  ~/.claude/claude_desktop_config.json'));
+    }
+
+    rl.close();
   }
 
   console.log('');
@@ -114,6 +157,4 @@ export async function runInit() {
   console.log(chalk.gray('  2. Users can: agentbridge add https://your-api.com/.agentbridge.json'));
   console.log(chalk.gray('  3. Or use MCP: npx @agentbridgeai/mcp --manifest .agentbridge.json'));
   console.log('');
-
-  rl.close();
 }

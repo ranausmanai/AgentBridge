@@ -257,6 +257,20 @@ curl -X POST https://agentbridge.cc/api/submit \
 
 ## 🏠 Self-Hosting
 
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_PATH` | No | Path to SQLite database file. Defaults to `./agentbridge.db` |
+| `NEXT_PUBLIC_SUPABASE_URL` | No | Supabase project URL. Omit to disable auth entirely |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | No | Supabase anon key. Required if `SUPABASE_URL` is set |
+| `PORT` | No | Server port. Defaults to `3000` |
+| `NODE_ENV` | No | Set to `production` for optimized builds |
+
+> **Auth is optional.** If Supabase env vars are not set, the app runs without login — all features (browse, register, chat, dashboard) work for everyone. Set Supabase vars to enable user accounts, API ownership, and per-user dashboards.
+
+Copy `.env.example` to `apps/web/.env.local` to get started.
+
 ### Docker
 
 ```bash
@@ -264,11 +278,20 @@ docker compose up -d
 # → Dashboard at http://localhost:3000
 ```
 
+To enable auth, uncomment the Supabase lines in `docker-compose.yml`.
+
 ### Docker (manual)
 
 ```bash
 docker build -t agentbridge .
 docker run -p 3000:3000 -v agentbridge-data:/app/apps/web/data agentbridge
+
+# With auth:
+docker run -p 3000:3000 \
+  -v agentbridge-data:/app/apps/web/data \
+  -e NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co \
+  -e NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ... \
+  agentbridge
 ```
 
 ### Vercel

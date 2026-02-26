@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { insertApi } from '@/lib/db';
-import { convertOpenAPIToManifest, type AgentBridgeManifest } from '@agentbridge/openapi';
+import { convertOpenAPIToManifest, type AgentBridgeManifest } from '@agentbridgeai/openapi';
 
 /**
  * Submit API endpoint — API owners submit their URL to the directory.

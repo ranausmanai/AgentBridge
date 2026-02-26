@@ -10,13 +10,13 @@ importers:
 
   apps/web:
     dependencies:
-      '@agentbridge/core':
+      '@agentbridgeai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agentbridge/llm':
+      '@agentbridgeai/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@agentbridge/openapi':
+      '@agentbridgeai/openapi':
         specifier: workspace:*
         version: link:../../packages/openapi
       '@supabase/ssr':
@@ -65,21 +65,15 @@ importers:
 
   packages/cli:
     dependencies:
-      '@agentbridge/core':
-        specifier: workspace:*
+      '@agentbridgeai/core':
+        specifier: workspace:^
         version: link:../core
-      '@agentbridge/llm':
-        specifier: workspace:*
+      '@agentbridgeai/llm':
+        specifier: workspace:^
         version: link:../llm
-      '@agentbridge/openapi':
-        specifier: workspace:*
+      '@agentbridgeai/openapi':
+        specifier: workspace:^
         version: link:../openapi
-      '@agentbridge/plugin-todo':
-        specifier: workspace:*
-        version: link:../../plugins/todo
-      '@agentbridge/plugin-weather':
-        specifier: workspace:*
-        version: link:../../plugins/weather
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -121,8 +115,8 @@ importers:
 
   packages/llm:
     dependencies:
-      '@agentbridge/core':
-        specifier: workspace:*
+      '@agentbridgeai/core':
+        specifier: workspace:^
         version: link:../core
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
@@ -140,11 +134,11 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@agentbridge/core':
-        specifier: workspace:*
+      '@agentbridgeai/core':
+        specifier: workspace:^
         version: link:../core
-      '@agentbridge/openapi':
-        specifier: workspace:*
+      '@agentbridgeai/openapi':
+        specifier: workspace:^
         version: link:../openapi
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
@@ -165,8 +159,8 @@ importers:
 
   packages/openapi:
     dependencies:
-      '@agentbridge/core':
-        specifier: workspace:*
+      '@agentbridgeai/core':
+        specifier: workspace:^
         version: link:../core
       yaml:
         specifier: ^2.6.0
@@ -184,8 +178,8 @@ importers:
 
   packages/sdk:
     dependencies:
-      '@agentbridge/core':
-        specifier: workspace:*
+      '@agentbridgeai/core':
+        specifier: workspace:^
         version: link:../core
       zod:
         specifier: ^3.23.0
@@ -200,10 +194,10 @@ importers:
 
   plugins/todo:
     dependencies:
-      '@agentbridge/core':
+      '@agentbridgeai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agentbridge/sdk':
+      '@agentbridgeai/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       zod:
@@ -219,10 +213,10 @@ importers:
 
   plugins/weather:
     dependencies:
-      '@agentbridge/core':
+      '@agentbridgeai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agentbridge/sdk':
+      '@agentbridgeai/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       zod:

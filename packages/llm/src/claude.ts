@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { LLMProvider, LLMTool, LLMResponse, Message, ToolCall } from '@agentbridge/core';
+import type { LLMProvider, LLMTool, LLMResponse, Message, ToolCall } from '@agentbridgeai/core';
 import { randomUUID } from 'crypto';
 
 export interface ClaudeProviderOptions {

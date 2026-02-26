@@ -1,16 +1,29 @@
 {
-  "name": "@agentbridge/sdk",
+  "name": "@agentbridgeai/sdk",
   "version": "0.1.0",
+  "description": "SDK for building custom AgentBridge plugins",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ranausmanai/AgentBridge.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://agentbridge.cc",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["sdk", "plugins", "ai-agents", "agentbridge"],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentbridge/core": "workspace:*",
+    "@agentbridgeai/core": "workspace:^",
     "zod": "^3.23.0"
   },
   "devDependencies": {

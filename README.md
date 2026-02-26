@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-22d3ee.svg?style=flat-square" alt="MIT License" /></a>
-  <a href="https://www.npmjs.com/package/@agentbridge/cli"><img src="https://img.shields.io/npm/v/@agentbridge/cli?style=flat-square&color=22d3ee&label=npm" alt="npm" /></a>
+  <a href="https://www.npmjs.com/package/@agentbridgeai/cli"><img src="https://img.shields.io/npm/v/@agentbridgeai/cli?style=flat-square&color=22d3ee&label=npm" alt="npm" /></a>
   <a href="https://agentbridge.cc"><img src="https://img.shields.io/badge/Directory-agentbridge.cc-22d3ee?style=flat-square" alt="Directory" /></a>
   <a href="https://github.com/ranausmanai/AgentBridge/stargazers"><img src="https://img.shields.io/github/stars/ranausmanai/AgentBridge?style=flat-square&color=22d3ee" alt="Stars" /></a>
   <a href="#packages"><img src="https://img.shields.io/badge/Packages-7-22d3ee?style=flat-square" alt="Packages" /></a>
@@ -121,7 +121,7 @@ agentbridge search weather
 Turn any OpenAPI spec into an MCP server:
 
 ```bash
-npx @agentbridge/mcp --openapi ./openapi.json
+npx @agentbridgeai/mcp --openapi ./openapi.json
 ```
 
 Add to Claude Desktop (`~/.claude/claude_desktop_config.json`):
@@ -131,7 +131,7 @@ Add to Claude Desktop (`~/.claude/claude_desktop_config.json`):
   "mcpServers": {
     "my-api": {
       "command": "npx",
-      "args": ["@agentbridge/mcp", "--openapi", "./openapi.json"]
+      "args": ["@agentbridgeai/mcp", "--openapi", "./openapi.json"]
     }
   }
 }
@@ -140,9 +140,9 @@ Add to Claude Desktop (`~/.claude/claude_desktop_config.json`):
 ### SDK — Embed in your app
 
 ```typescript
-import { AgentBridgeEngine } from '@agentbridge/core';
-import { OpenAIProvider } from '@agentbridge/llm';
-import { convertOpenAPIToManifest, manifestToPlugin } from '@agentbridge/openapi';
+import { AgentBridgeEngine } from '@agentbridgeai/core';
+import { OpenAIProvider } from '@agentbridgeai/llm';
+import { convertOpenAPIToManifest, manifestToPlugin } from '@agentbridgeai/openapi';
 
 // Any OpenAPI spec → agent-ready plugin
 const manifest = convertOpenAPIToManifest(openApiSpec);
@@ -168,13 +168,13 @@ Visit [agentbridge.cc/chat](https://agentbridge.cc/chat), pick your APIs, enter 
 
 | Package | Description | |
 |---|---|---|
-| [`@agentbridge/core`](packages/core) | Engine, plugin registry, conversation manager | [![npm](https://img.shields.io/npm/v/@agentbridge/core?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridge/core) |
-| [`@agentbridge/llm`](packages/llm) | LLM providers — Claude, GPT, Groq, Ollama, any OpenAI-compatible | [![npm](https://img.shields.io/npm/v/@agentbridge/llm?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridge/llm) |
-| [`@agentbridge/openapi`](packages/openapi) | OpenAPI spec → agent-ready manifest converter | [![npm](https://img.shields.io/npm/v/@agentbridge/openapi?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridge/openapi) |
-| [`@agentbridge/mcp`](packages/mcp) | MCP server — expose APIs to Claude, Cursor, Windsurf | [![npm](https://img.shields.io/npm/v/@agentbridge/mcp?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridge/mcp) |
-| [`@agentbridge/sdk`](packages/sdk) | SDK for building custom agent plugins | [![npm](https://img.shields.io/npm/v/@agentbridge/sdk?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridge/sdk) |
-| [`@agentbridge/cli`](packages/cli) | CLI — chat with APIs from your terminal | [![npm](https://img.shields.io/npm/v/@agentbridge/cli?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridge/cli) |
-| [`@agentbridge/web`](apps/web) | Web dashboard — browse, register, chat | [agentbridge.cc](https://agentbridge.cc) |
+| [`@agentbridgeai/core`](packages/core) | Engine, plugin registry, conversation manager | [![npm](https://img.shields.io/npm/v/@agentbridgeai/core?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridgeai/core) |
+| [`@agentbridgeai/llm`](packages/llm) | LLM providers — Claude, GPT, Groq, Ollama, any OpenAI-compatible | [![npm](https://img.shields.io/npm/v/@agentbridgeai/llm?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridgeai/llm) |
+| [`@agentbridgeai/openapi`](packages/openapi) | OpenAPI spec → agent-ready manifest converter | [![npm](https://img.shields.io/npm/v/@agentbridgeai/openapi?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridgeai/openapi) |
+| [`@agentbridgeai/mcp`](packages/mcp) | MCP server — expose APIs to Claude, Cursor, Windsurf | [![npm](https://img.shields.io/npm/v/@agentbridgeai/mcp?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridgeai/mcp) |
+| [`@agentbridgeai/sdk`](packages/sdk) | SDK for building custom agent plugins | [![npm](https://img.shields.io/npm/v/@agentbridgeai/sdk?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridgeai/sdk) |
+| [`@agentbridgeai/cli`](packages/cli) | CLI — chat with APIs from your terminal | [![npm](https://img.shields.io/npm/v/@agentbridgeai/cli?style=flat-square&color=22d3ee&label=)](https://www.npmjs.com/package/@agentbridgeai/cli) |
+| [`@agentbridgeai/web`](apps/web) | Web dashboard — browse, register, chat | [agentbridge.cc](https://agentbridge.cc) |
 
 ## 📋 The Manifest Format
 

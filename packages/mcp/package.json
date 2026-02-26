@@ -1,21 +1,33 @@
 {
-  "name": "@agentbridge/mcp",
+  "name": "@agentbridgeai/mcp",
   "version": "0.1.0",
+  "description": "MCP server that exposes any AgentBridge-registered API as tools for Claude, Cursor, Windsurf, etc.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "agentbridge-mcp": "./dist/server.js"
   },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ranausmanai/AgentBridge.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://agentbridge.cc",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["mcp", "model-context-protocol", "claude", "cursor", "windsurf", "agentbridge"],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist"
   },
-  "description": "MCP server that exposes any AgentBridge-registered API as tools for Claude, Cursor, Windsurf, etc.",
   "dependencies": {
-    "@agentbridge/core": "workspace:*",
-    "@agentbridge/openapi": "workspace:*",
+    "@agentbridgeai/core": "workspace:^",
+    "@agentbridgeai/openapi": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.23.0",
     "yaml": "^2.6.0"

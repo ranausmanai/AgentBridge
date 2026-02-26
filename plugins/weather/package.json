@@ -1,5 +1,5 @@
 {
-  "name": "@agentbridge/plugin-weather",
+  "name": "@agentbridgeai/plugin-weather",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,8 +10,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentbridge/core": "workspace:*",
-    "@agentbridge/sdk": "workspace:*",
+    "@agentbridgeai/core": "workspace:*",
+    "@agentbridgeai/sdk": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {

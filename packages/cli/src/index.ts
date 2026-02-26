@@ -2,11 +2,9 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { AgentBridgeEngine } from '@agentbridge/core';
-import { ClaudeProvider, OpenAIProvider } from '@agentbridge/llm';
-import { APIRegistry, convertOpenAPIToManifest, discoverFromDomain } from '@agentbridge/openapi';
-import weatherPlugin from '@agentbridge/plugin-weather';
-import todoPlugin from '@agentbridge/plugin-todo';
+import { AgentBridgeEngine } from '@agentbridgeai/core';
+import { ClaudeProvider, OpenAIProvider } from '@agentbridgeai/llm';
+import { APIRegistry, convertOpenAPIToManifest, discoverFromDomain } from '@agentbridgeai/openapi';
 import { startRepl } from './repl.js';
 import { runInit } from './commands.js';
 import { readFileSync } from 'fs';
@@ -68,7 +66,7 @@ program
 
     // Load all plugins
     const registryPlugins = registry.toPlugins();
-    const allPlugins = [weatherPlugin, todoPlugin, ...registryPlugins];
+    const allPlugins = [...registryPlugins];
 
     if (allPlugins.length === 2) {
       // Only built-in plugins

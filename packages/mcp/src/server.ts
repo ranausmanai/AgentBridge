@@ -20,7 +20,7 @@
  *     "mcpServers": {
  *       "agentbridge": {
  *         "command": "npx",
- *         "args": ["@agentbridge/mcp", "--manifest", "./my-api.agentbridge.json"]
+ *         "args": ["@agentbridgeai/mcp", "--manifest", "./my-api.agentbridge.json"]
  *       }
  *     }
  *   }
@@ -28,7 +28,7 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createMCPServer } from './mcp-server.js';
-import { convertOpenAPIToManifest, APIRegistry, type AgentBridgeManifest } from '@agentbridge/openapi';
+import { convertOpenAPIToManifest, APIRegistry, type AgentBridgeManifest } from '@agentbridgeai/openapi';
 import { readFileSync, existsSync } from 'fs';
 import { parse as parseYAML } from 'yaml';
 
@@ -83,7 +83,7 @@ Add to Claude Desktop (~/.claude/claude_desktop_config.json):
     "mcpServers": {
       "my-api": {
         "command": "npx",
-        "args": ["@agentbridge/mcp", "--openapi", "./openapi.json"]
+        "args": ["@agentbridgeai/mcp", "--openapi", "./openapi.json"]
       }
     }
   }

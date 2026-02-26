@@ -1,4 +1,4 @@
-import type { Plugin } from '@agentbridge/core';
+import type { Plugin } from '@agentbridgeai/core';
 import type { AgentBridgeManifest } from './types.js';
 import { manifestToPlugin } from './manifest-to-plugin.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';

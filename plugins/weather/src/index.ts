@@ -1,5 +1,5 @@
-import type { Plugin } from '@agentbridge/core';
-import { definePlugin } from '@agentbridge/sdk';
+import type { Plugin } from '@agentbridgeai/core';
+import { definePlugin } from '@agentbridgeai/sdk';
 import { z } from 'zod';
 
 const plugin: Plugin = definePlugin({

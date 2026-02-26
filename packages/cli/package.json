@@ -1,12 +1,25 @@
 {
-  "name": "@agentbridge/cli",
+  "name": "@agentbridgeai/cli",
   "version": "0.1.0",
+  "description": "CLI to chat with any API using natural language — powered by AgentBridge",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "agentbridge": "./dist/index.js"
   },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ranausmanai/AgentBridge.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://agentbridge.cc",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["cli", "ai-agents", "api", "natural-language", "agentbridge", "chatbot"],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -14,11 +27,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentbridge/core": "workspace:*",
-    "@agentbridge/llm": "workspace:*",
-    "@agentbridge/openapi": "workspace:*",
-    "@agentbridge/plugin-weather": "workspace:*",
-    "@agentbridge/plugin-todo": "workspace:*",
+    "@agentbridgeai/core": "workspace:^",
+    "@agentbridgeai/llm": "workspace:^",
+    "@agentbridgeai/openapi": "workspace:^",
     "chalk": "^5.3.0",
     "ora": "^8.1.0",
     "commander": "^12.1.0",

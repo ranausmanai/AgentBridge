@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Plugin, Action, ActionResult } from '@agentbridge/core';
+import type { Plugin, Action, ActionResult } from '@agentbridgeai/core';
 import type { AgentBridgeManifest, ManifestAction, ManifestParameter } from './types.js';
 
 export interface PluginFromManifestOptions {

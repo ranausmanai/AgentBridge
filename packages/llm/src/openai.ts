@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { LLMProvider, LLMTool, LLMResponse, Message, ToolCall } from '@agentbridge/core';
+import type { LLMProvider, LLMTool, LLMResponse, Message, ToolCall } from '@agentbridgeai/core';
 
 export interface OpenAIProviderOptions {
   apiKey?: string;

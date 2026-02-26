@@ -1,6 +1,6 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import type { AgentBridgeManifest, ManifestAction } from '@agentbridge/openapi';
+import type { AgentBridgeManifest, ManifestAction } from '@agentbridgeai/openapi';
 import { manifestToMCPTools } from './manifest-to-mcp.js';
 
 export interface MCPServerOptions {

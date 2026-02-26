@@ -1,16 +1,29 @@
 {
-  "name": "@agentbridge/openapi",
+  "name": "@agentbridgeai/openapi",
   "version": "0.1.0",
+  "description": "OpenAPI spec to agent-ready manifest converter for AgentBridge",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ranausmanai/AgentBridge.git",
+    "directory": "packages/openapi"
+  },
+  "homepage": "https://agentbridge.cc",
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": ["openapi", "swagger", "api", "ai-agents", "agentbridge", "converter"],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentbridge/core": "workspace:*",
+    "@agentbridgeai/core": "workspace:^",
     "yaml": "^2.6.0",
     "zod": "^3.23.0"
   },

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getApiByName } from '@/lib/db';
 import { createEngine, type LLMProviderType } from '@/lib/bridge';
-import type { AgentBridgeManifest } from '@agentbridge/openapi';
+import type { AgentBridgeManifest } from '@agentbridgeai/openapi';
 
 // Store sessions in memory (per-server instance)
 const sessions = new Map<string, { engineSessionId: string; engine: any }>();

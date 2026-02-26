@@ -1,4 +1,4 @@
-import type { Plugin, Action, AuthConfig } from '@agentbridge/core';
+import type { Plugin, Action, AuthConfig } from '@agentbridgeai/core';
 import { z } from 'zod';
 
 export interface PluginDefinition {
@@ -24,7 +24,7 @@ export interface ActionDefinition {
  *
  * Usage:
  * ```ts
- * import { definePlugin } from '@agentbridge/sdk';
+ * import { definePlugin } from '@agentbridgeai/sdk';
  * import { z } from 'zod';
  *
  * export default definePlugin({

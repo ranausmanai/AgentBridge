@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { convertOpenAPIToManifest } from '@agentbridge/openapi';
+import { convertOpenAPIToManifest } from '@agentbridgeai/openapi';
 import { insertApi } from '@/lib/db';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';

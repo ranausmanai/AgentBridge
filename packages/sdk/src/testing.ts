@@ -1,4 +1,4 @@
-import type { Plugin, ActionResult, Session } from '@agentbridge/core';
+import type { Plugin, ActionResult, Session } from '@agentbridgeai/core';
 import { randomUUID } from 'crypto';
 
 /**

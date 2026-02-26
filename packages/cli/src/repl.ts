@@ -1,7 +1,7 @@
 import * as readline from 'readline';
 import chalk from 'chalk';
 import ora from 'ora';
-import type { AgentBridgeEngine, ToolCall, ActionResult } from '@agentbridge/core';
+import type { AgentBridgeEngine, ToolCall, ActionResult } from '@agentbridgeai/core';
 
 export async function startRepl(engine: AgentBridgeEngine): Promise<void> {
   const sessionId = engine.createSession();

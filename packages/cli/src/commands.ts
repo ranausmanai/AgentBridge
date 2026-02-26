@@ -1,7 +1,7 @@
 import * as readline from 'readline';
 import chalk from 'chalk';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { convertOpenAPIToManifest, type AgentBridgeManifest } from '@agentbridge/openapi';
+import { convertOpenAPIToManifest, type AgentBridgeManifest } from '@agentbridgeai/openapi';
 
 function ask(rl: readline.Interface, question: string): Promise<string> {
   return new Promise(resolve => rl.question(question, resolve));
@@ -93,7 +93,7 @@ export async function runInit() {
       mcpServers: {
         [manifest.name]: {
           command: 'npx',
-          args: ['@agentbridge/mcp', '--manifest', './.agentbridge.json'],
+          args: ['@agentbridgeai/mcp', '--manifest', './.agentbridge.json'],
         },
       },
     };
@@ -112,7 +112,7 @@ export async function runInit() {
   console.log(chalk.gray('  Next steps:'));
   console.log(chalk.gray('  1. Host .agentbridge.json alongside your API'));
   console.log(chalk.gray('  2. Users can: agentbridge add https://your-api.com/.agentbridge.json'));
-  console.log(chalk.gray('  3. Or use MCP: npx @agentbridge/mcp --manifest .agentbridge.json'));
+  console.log(chalk.gray('  3. Or use MCP: npx @agentbridgeai/mcp --manifest .agentbridge.json'));
   console.log('');
 
   rl.close();

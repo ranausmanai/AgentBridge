@@ -1,6 +1,6 @@
-import { AgentBridgeEngine } from '@agentbridge/core';
-import { ClaudeProvider, OpenAIProvider } from '@agentbridge/llm';
-import { manifestToPlugin, type AgentBridgeManifest } from '@agentbridge/openapi';
+import { AgentBridgeEngine } from '@agentbridgeai/core';
+import { ClaudeProvider, OpenAIProvider } from '@agentbridgeai/llm';
+import { manifestToPlugin, type AgentBridgeManifest } from '@agentbridgeai/openapi';
 
 export type LLMProviderType = 'openai' | 'claude' | 'groq';
 

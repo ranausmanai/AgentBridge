@@ -1,4 +1,4 @@
-import type { AgentBridgeManifest, ManifestAction, ManifestParameter } from '@agentbridge/openapi';
+import type { AgentBridgeManifest, ManifestAction, ManifestParameter } from '@agentbridgeai/openapi';
 
 /**
  * Convert AgentBridge manifest actions into MCP tool definitions.

@@ -59,6 +59,37 @@ async function main() {
       const content = readFileSync(filePath, 'utf-8');
       const manifest = convertOpenAPIToManifest(content);
       manifests.push(manifest);
+    } else if (arg === '--url' || arg === '-u') {
+      const url = args[++i];
+      if (!url) {
+        console.error('Missing URL argument for --url');
+        process.exit(1);
+      }
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const manifest = await res.json() as AgentBridgeManifest;
+        manifests.push(manifest);
+      } catch (err: any) {
+        console.error(`Failed to fetch manifest from ${url}: ${err.message}`);
+        process.exit(1);
+      }
+    } else if (arg === '--api' || arg === '-a') {
+      const apiName = args[++i];
+      if (!apiName) {
+        console.error('Missing API name argument for --api');
+        process.exit(1);
+      }
+      const registryUrl = process.env.AGENTBRIDGE_REGISTRY || 'https://agentbridge.cc';
+      try {
+        const res = await fetch(`${registryUrl}/api/${apiName}/manifest`);
+        if (!res.ok) throw new Error(`API "${apiName}" not found (HTTP ${res.status})`);
+        const manifest = await res.json() as AgentBridgeManifest;
+        manifests.push(manifest);
+      } catch (err: any) {
+        console.error(`Failed to fetch "${apiName}" from registry: ${err.message}`);
+        process.exit(1);
+      }
     } else if (arg === '--token' || arg === '-t') {
       // --token api-name:token-value
       const tokenArg = args[++i];
@@ -73,17 +104,19 @@ async function main() {
 AgentBridge MCP Server — Expose any API as MCP tools
 
 Usage:
-  agentbridge-mcp                              # Load from local registry
-  agentbridge-mcp --manifest api.json          # Load from manifest file
-  agentbridge-mcp --openapi openapi.yaml       # Load from OpenAPI spec
+  agentbridge-mcp --api extractly-api          # Load from agentbridge.cc by name
+  agentbridge-mcp --url https://example.com/m  # Load manifest from any URL
+  agentbridge-mcp --manifest api.json          # Load from local manifest file
+  agentbridge-mcp --openapi openapi.yaml       # Load from local OpenAPI spec
   agentbridge-mcp --token api-name:token       # Set auth token
+  agentbridge-mcp                              # Load from local registry
 
-Add to Claude Desktop (~/.claude/claude_desktop_config.json):
+Claude Desktop (~/.claude/claude_desktop_config.json):
   {
     "mcpServers": {
-      "my-api": {
+      "extractly": {
         "command": "npx",
-        "args": ["@agentbridgeai/mcp", "--openapi", "./openapi.json"]
+        "args": ["@agentbridgeai/mcp", "--api", "extractly-api"]
       }
     }
   }

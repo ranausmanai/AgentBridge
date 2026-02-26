@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server that exposes any AgentBridge-registered API as tools for Claude, Cursor, Windsurf, etc.",
   "type": "module",
   "main": "./dist/index.js",

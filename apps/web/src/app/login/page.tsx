@@ -12,12 +12,23 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const router = useRouter();
+  const next = typeof window !== 'undefined'
+    ? (new URLSearchParams(window.location.search).get('next') || '/register')
+    : '/register';
 
   useEffect(() => {
     if (!isAuthEnabled()) {
       router.replace('/');
+      return;
     }
-  }, [router]);
+    const supabase = createClient();
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        router.replace(next);
+      }
+    });
+  }, [router, next]);
 
   if (!isAuthEnabled()) {
     return (
@@ -64,7 +75,7 @@ export default function LoginPage() {
       if (error) {
         setError(error.message);
       } else {
-        router.push('/register');
+        router.push(next);
         router.refresh();
       }
     }
@@ -77,7 +88,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
   }

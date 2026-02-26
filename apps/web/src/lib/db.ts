@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { join } from 'path';
+import { createHash, randomBytes } from 'crypto';
 
 const DB_PATH = process.env.DATABASE_PATH || join(process.cwd(), 'agentbridge.db');
 
@@ -74,6 +75,20 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_api_events_name ON api_events(api_name);
     CREATE INDEX IF NOT EXISTS idx_api_events_created ON api_events(created_at);
+  `);
+
+  // CLI login tokens
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cli_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id TEXT NOT NULL,
+      token_hash TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      last_used_at DATETIME
+    );
+    CREATE INDEX IF NOT EXISTS idx_cli_tokens_owner ON cli_tokens(owner_id);
+    CREATE INDEX IF NOT EXISTS idx_cli_tokens_expiry ON cli_tokens(expires_at);
   `);
 }
 
@@ -183,6 +198,43 @@ export function deleteApi(name: string, ownerId?: string) {
   }
   db.prepare('DELETE FROM api_actions WHERE api_id = ?').run(api.id);
   db.prepare('DELETE FROM apis WHERE id = ?').run(api.id);
+}
+
+// ---- CLI Auth Tokens ----
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+export function createCliToken(ownerId: string, ttlDays = 30): string {
+  const token = `abt_${randomBytes(24).toString('hex')}`;
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + ttlDays * 86400000).toISOString();
+
+  getDb().prepare(
+    'INSERT INTO cli_tokens (owner_id, token_hash, expires_at) VALUES (?, ?, ?)',
+  ).run(ownerId, tokenHash, expiresAt);
+
+  return token;
+}
+
+export function verifyCliToken(token: string): { ownerId: string } | null {
+  if (!token || !token.startsWith('abt_')) return null;
+  const tokenHash = hashToken(token);
+  const now = new Date().toISOString();
+
+  const row = getDb().prepare(
+    'SELECT owner_id, expires_at FROM cli_tokens WHERE token_hash = ?',
+  ).get(tokenHash) as { owner_id: string; expires_at: string } | undefined;
+
+  if (!row) return null;
+  if (row.expires_at <= now) return null;
+
+  getDb().prepare(
+    'UPDATE cli_tokens SET last_used_at = CURRENT_TIMESTAMP WHERE token_hash = ?',
+  ).run(tokenHash);
+
+  return { ownerId: row.owner_id };
 }
 
 // ---- Analytics ----

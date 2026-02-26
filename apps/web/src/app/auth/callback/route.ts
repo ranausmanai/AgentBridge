@@ -7,10 +7,13 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/register';
 
-  // Use forwarded headers from Nginx to get the real origin (not Docker internal hostname)
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'agentbridge.cc';
-  const origin = `${forwardedProto}://${forwardedHost}`;
+  // Resolve origin safely for both local dev (http://localhost:300x) and proxied prod.
+  const reqUrl = new URL(request.url);
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const origin = forwardedProto && forwardedHost
+    ? `${forwardedProto}://${forwardedHost}`
+    : reqUrl.origin;
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     return NextResponse.redirect(`${origin}/login`);

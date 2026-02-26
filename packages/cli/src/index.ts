@@ -8,12 +8,31 @@ import { APIRegistry, convertOpenAPIToManifest, discoverFromDomain } from '@agen
 import { startRepl } from './repl.js';
 import { runInit } from './commands.js';
 import { readFileSync } from 'fs';
+import { createServer } from 'http';
+import { randomUUID } from 'crypto';
+import { spawn } from 'child_process';
+import Conf from 'conf';
 
 const REGISTRY_URL = process.env.AGENTBRIDGE_REGISTRY || 'https://agentbridge.cc';
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
 const GROQ_DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+const CLI_AUTH_PATH = '/api/cli-auth/start';
+const config = new Conf<{ registryToken?: string; registryUrl?: string }>({ projectName: 'agentbridge' });
 
 const program = new Command();
+
+function parseMaybeJson(text: string): any | null {
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isLikelyHtml(text: string): boolean {
+  const v = text.trimStart().toLowerCase();
+  return v.startsWith('<!doctype html') || v.startsWith('<html');
+}
 
 program
   .name('agentbridge')
@@ -179,14 +198,86 @@ program
 
       const res = await fetch(`${registryUrl}/api/import`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getRegistryAuthHeaders(registryUrl),
+        },
         body: JSON.stringify({ ...body, is_public: !opts?.private }),
       });
 
-      const data = await res.json();
+      const raw = await res.text();
+      const data = parseMaybeJson(raw);
 
       if (!res.ok) {
-        console.error(chalk.red(`  Failed: ${data.error}`));
+        if (res.status === 401 || data?.code === 'AUTH_REQUIRED') {
+          console.error(chalk.yellow('  Login required to publish on this registry.'));
+          const shouldLogin = await promptYesNo('  Open login in browser now? (Y/n): ');
+          if (shouldLogin) {
+            const ok = await loginToRegistry(registryUrl);
+            if (!ok) {
+              console.error(chalk.red('  Login failed or was cancelled.'));
+              return;
+            }
+
+            const retryRes = await fetch(`${registryUrl}/api/import`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...getRegistryAuthHeaders(registryUrl),
+              },
+              body: JSON.stringify({ ...body, is_public: !opts?.private }),
+            });
+            const retryRaw = await retryRes.text();
+            const retryData = parseMaybeJson(retryRaw);
+            if (!retryRes.ok) {
+              const msg = retryData?.error || `Unexpected response (${retryRes.status})`;
+              console.error(chalk.red(`  Failed after login: ${msg}`));
+              if (!retryData && retryRaw) {
+                const preview = retryRaw.replace(/\s+/g, ' ').slice(0, 140);
+                console.error(chalk.gray(`  Server response preview: ${preview}${retryRaw.length > 140 ? '…' : ''}`));
+              }
+              return;
+            }
+            if (!retryData) {
+              console.error(chalk.red('  Failed after login: server did not return JSON.'));
+              const preview = retryRaw.replace(/\s+/g, ' ').slice(0, 140);
+              console.error(chalk.gray(`  Server response preview: ${preview}${retryRaw.length > 140 ? '…' : ''}`));
+              return;
+            }
+
+            console.log('');
+            console.log(chalk.green.bold(`  Published${opts?.private ? ' (private)' : ''}: ${retryData.name}`));
+            console.log(chalk.gray(`  ${retryData.description}`));
+            console.log(chalk.gray(`  ${retryData.action_count} actions registered`));
+            console.log('');
+            console.log(chalk.white('  Your API is now live at:'));
+            console.log(chalk.cyan(`    ${registryUrl}/api/${retryData.name}`));
+            console.log('');
+            return;
+          }
+          return;
+        }
+        const msg = data?.error || `Unexpected response (${res.status})`;
+        console.error(chalk.red(`  Failed: ${msg}`));
+        if (!data && raw) {
+          const preview = raw.replace(/\s+/g, ' ').slice(0, 140);
+          console.error(chalk.gray(`  Server response preview: ${preview}${raw.length > 140 ? '…' : ''}`));
+          if (isLikelyHtml(raw)) {
+            console.error(chalk.yellow(`  Registry at ${registryUrl} returned HTML instead of API JSON.`));
+            console.error(chalk.gray('  Check AGENTBRIDGE_REGISTRY (wrong host/port is likely).'));
+          }
+        }
+        return;
+      }
+
+      if (!data) {
+        console.error(chalk.red('  Failed: server did not return JSON.'));
+        const preview = raw.replace(/\s+/g, ' ').slice(0, 140);
+        console.error(chalk.gray(`  Server response preview: ${preview}${raw.length > 140 ? '…' : ''}`));
+        if (isLikelyHtml(raw)) {
+          console.error(chalk.yellow(`  Registry at ${registryUrl} returned HTML instead of API JSON.`));
+          console.error(chalk.gray('  Check AGENTBRIDGE_REGISTRY (wrong host/port is likely).'));
+        }
         return;
       }
 
@@ -359,7 +450,128 @@ program
     await runInit({ yes: opts?.yes, spec: opts?.spec });
   });
 
+// ---- Login: authenticate CLI with hosted registry ----
+program
+  .command('login')
+  .description('Login to AgentBridge registry from CLI')
+  .option('--registry <url>', 'Custom registry URL')
+  .action(async (opts?: any) => {
+    const registryUrl = opts?.registry || REGISTRY_URL;
+    const ok = await loginToRegistry(registryUrl);
+    if (!ok) process.exit(1);
+  });
+
 // ---- Helper ----
+function getRegistryAuthHeaders(registryUrl: string): Record<string, string> {
+  const envToken = process.env.AGENTBRIDGE_TOKEN;
+  const savedToken = config.get('registryToken');
+  const savedRegistry = config.get('registryUrl');
+  const token = envToken || (savedRegistry === registryUrl ? savedToken : undefined);
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+async function promptYesNo(question: string, defaultYes = true): Promise<boolean> {
+  const readline = await import('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>(resolve => rl.question(chalk.white(question), resolve));
+  rl.close();
+  const normalized = answer.trim().toLowerCase();
+  if (!normalized) return defaultYes;
+  if (['y', 'yes'].includes(normalized)) return true;
+  if (['n', 'no'].includes(normalized)) return false;
+  return defaultYes;
+}
+
+function openBrowser(url: string): Promise<boolean> {
+  return new Promise(resolve => {
+    const platform = process.platform;
+    const cmd =
+      platform === 'darwin' ? 'open' :
+      platform === 'win32' ? 'cmd' :
+      'xdg-open';
+    const args =
+      platform === 'win32' ? ['/c', 'start', '', url] : [url];
+
+    const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
+    child.once('error', () => resolve(false));
+    child.once('spawn', () => {
+      child.unref();
+      resolve(true);
+    });
+  });
+}
+
+async function loginToRegistry(registryUrl: string): Promise<boolean> {
+  const state = randomUUID();
+  const callbackData = await waitForCliLoginCallback(state, registryUrl);
+  if (!callbackData) return false;
+
+  config.set('registryToken', callbackData.token);
+  config.set('registryUrl', registryUrl);
+
+  console.log(chalk.green('  Login successful. CLI is authenticated for publish operations.'));
+  return true;
+}
+
+async function waitForCliLoginCallback(state: string, registryUrl: string): Promise<{ token: string } | null> {
+  return new Promise(async resolve => {
+    const server = createServer((req, res) => {
+      const reqUrl = new URL(req.url || '/', 'http://127.0.0.1');
+      if (reqUrl.pathname !== '/callback') {
+        res.statusCode = 404;
+        res.end('Not found');
+        return;
+      }
+
+      const token = reqUrl.searchParams.get('token');
+      const returnedState = reqUrl.searchParams.get('state');
+      const ok = token && returnedState === state;
+
+      res.statusCode = ok ? 200 : 400;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.end(ok
+        ? '<h2>AgentBridge CLI login complete.</h2><p>You can close this tab and return to terminal.</p>'
+        : '<h2>AgentBridge CLI login failed.</h2><p>Invalid callback state.</p>');
+
+      server.close();
+      resolve(ok ? { token: token! } : null);
+    });
+
+    server.listen(0, '127.0.0.1', async () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close();
+        resolve(null);
+        return;
+      }
+
+      const callbackUrl = `http://127.0.0.1:${address.port}/callback`;
+      const loginUrl = `${registryUrl}${CLI_AUTH_PATH}?callback_url=${encodeURIComponent(callbackUrl)}&state=${encodeURIComponent(state)}`;
+
+      console.log('');
+      console.log(chalk.bold.cyan('  AgentBridge Login'));
+      console.log(chalk.gray(`  Registry: ${registryUrl}`));
+      console.log(chalk.gray('  Complete login in your browser, then return here.'));
+      console.log(chalk.white(`  ${loginUrl}`));
+
+      const opened = await openBrowser(loginUrl);
+      if (opened) {
+        console.log(chalk.gray('  Opened browser window for login.'));
+      } else {
+        console.log(chalk.yellow('  Could not open browser automatically.'));
+      }
+
+      const timeout = setTimeout(() => {
+        server.close();
+        resolve(null);
+      }, 180000);
+
+      server.on('close', () => clearTimeout(timeout));
+    });
+  });
+}
+
 async function createLLMProvider() {
   if (process.env.ANTHROPIC_API_KEY) {
     return new ClaudeProvider({

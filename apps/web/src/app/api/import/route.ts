@@ -1,10 +1,24 @@
 import { NextResponse } from 'next/server';
 import { convertOpenAPIToManifest } from '@agentbridgeai/openapi';
-import { insertApi } from '@/lib/db';
+import { insertApi, verifyCliToken } from '@/lib/db';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-async function getUser() {
+function getBearerToken(request: Request): string | null {
+  const auth = request.headers.get('authorization');
+  if (!auth) return null;
+  const [scheme, token] = auth.split(' ');
+  if (!scheme || !token || scheme.toLowerCase() !== 'bearer') return null;
+  return token.trim();
+}
+
+async function getUser(request: Request) {
+  const bearer = getBearerToken(request);
+  if (bearer) {
+    const verified = verifyCliToken(bearer);
+    if (verified) return { id: verified.ownerId };
+  }
+
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     return null;
   }
@@ -27,11 +41,18 @@ async function getUser() {
 
 export async function POST(request: Request) {
   try {
+    const authEnabled = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
     const body = await request.json();
     const { spec, url, is_public } = body as { spec?: string; url?: string; is_public?: boolean };
 
-    // Get authenticated user (optional for CLI/API usage, required for web)
-    const user = await getUser();
+    // Hosted mode parity: publishing requires identity whenever auth is enabled.
+    const user = await getUser(request);
+    if (authEnabled && !user) {
+      return NextResponse.json(
+        { error: 'Login required to publish APIs', code: 'AUTH_REQUIRED' },
+        { status: 401 },
+      );
+    }
 
     let specContent: string;
 

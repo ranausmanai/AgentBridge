@@ -1,6 +1,43 @@
 import { NextResponse } from 'next/server';
-import { insertApi } from '@/lib/db';
+import { insertApi, verifyCliToken } from '@/lib/db';
 import { convertOpenAPIToManifest, type AgentBridgeManifest } from '@agentbridgeai/openapi';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+
+function getBearerToken(request: Request): string | null {
+  const auth = request.headers.get('authorization');
+  if (!auth) return null;
+  const [scheme, token] = auth.split(' ');
+  if (!scheme || !token || scheme.toLowerCase() !== 'bearer') return null;
+  return token.trim();
+}
+
+async function getUser(request: Request) {
+  const bearer = getBearerToken(request);
+  if (bearer) {
+    const verified = verifyCliToken(bearer);
+    if (verified) return { id: verified.ownerId };
+  }
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return null;
+  }
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(cookiesToSet) {
+          try { cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); } catch {}
+        },
+      },
+    },
+  );
+  const { data } = await supabase.auth.getUser();
+  return data.user;
+}
 
 /**
  * Submit API endpoint — API owners submit their URL to the directory.
@@ -16,6 +53,15 @@ import { convertOpenAPIToManifest, type AgentBridgeManifest } from '@agentbridge
  */
 export async function POST(request: Request) {
   try {
+    const authEnabled = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+    const user = await getUser(request);
+    if (authEnabled && !user) {
+      return NextResponse.json(
+        { error: 'Login required to submit APIs', code: 'AUTH_REQUIRED' },
+        { status: 401 },
+      );
+    }
+
     const body = await request.json();
     const { url, openapi_url, tags, category } = body as {
       url?: string;
@@ -75,6 +121,7 @@ export async function POST(request: Request) {
       auth_config: manifest.auth ? JSON.stringify(manifest.auth) : null,
       manifest: JSON.stringify(manifest),
       openapi_spec: null,
+      owner_id: user?.id,
       actions: manifest.actions.map(a => ({
         action_id: a.id,
         description: a.description,

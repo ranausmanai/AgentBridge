@@ -144,3 +144,37 @@ curl -s https://agentbridge.cc/api/apis
 - Do not store raw API keys/tokens/passwords in repo files.
 - If credentials are pasted in chat/terminal, rotate them immediately.
 - Keep OAuth client secret server-side only (never in client bundle).
+
+
+## 7) 400/429 "status code (no body)" in web chat
+
+### Symptoms
+- UI chat sometimes returned opaque errors like:
+  - `400 status code (no body)`
+  - `429 status code (no body)`
+
+### Root causes found
+- Provider responses from OpenAI-compatible SDK can surface with minimal body.
+- Web API route (`/api/chat`) was always returning HTTP 500, hiding true upstream status.
+- During no-tool fallback, models could still phrase responses as if data had been fetched.
+
+### Fixes implemented
+- `/Users/usman/Documents/Vibed/clitest/packages/llm/src/openai.ts`
+  - Added resilient retry path for tool-mode failures:
+    - retry with fewer tools on 400/413
+    - then retry without tools when needed
+  - Added provider-aware error normalization:
+    - clearer messages for 401/429 and generic 400-no-body cases
+    - preserves `err.status` for caller
+- `/Users/usman/Documents/Vibed/clitest/apps/web/src/app/api/chat/route.ts`
+  - Now returns the actual provider status code when available (not always 500).
+- `/Users/usman/Documents/Vibed/clitest/packages/core/src/engine.ts`
+  - System prompt now explicitly forbids claiming actions/data fetches unless tools actually ran successfully.
+
+### Validation done
+- Web `/api/chat` with Groq key + Spotify:
+  - returns 200 and tool-call failure message when Spotify token missing (expected).
+- Web `/api/chat` with Gemini key:
+  - returns HTTP 429 with clear quota message (instead of opaque 500/no-body).
+- CLI interactive chat with Spotify:
+  - tool call executes and reports 401 token-missing clearly.

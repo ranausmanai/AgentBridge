@@ -15,6 +15,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <Nav />
           <main>{children}</main>
+          <footer className="border-t border-[var(--border)] mt-16">
+            <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col md:flex-row gap-3 md:gap-6 md:items-center md:justify-between text-sm">
+              <div className="text-[var(--text-muted)]">
+                © {new Date().getFullYear()} AgentBridge
+              </div>
+              <div className="flex items-center gap-4 text-[var(--text-secondary)]">
+                <a href="/" className="hover:text-[var(--text-primary)] transition">Home</a>
+                <a href="/privacy" className="hover:text-[var(--text-primary)] transition">Privacy Policy</a>
+                <a href="/terms" className="hover:text-[var(--text-primary)] transition">Terms of Service</a>
+              </div>
+            </div>
+          </footer>
         </ThemeProvider>
       </body>
     </html>

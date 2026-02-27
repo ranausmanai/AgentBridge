@@ -20,7 +20,7 @@ export class OpenAIProvider implements LLMProvider {
       apiKey: options.apiKey,
       baseURL: options.baseURL,
     });
-    this.model = options.model ?? 'gpt-4o';
+    this.model = options.model ?? 'gpt-5-nano';
     this.maxTokens = options.maxTokens ?? 4096;
     this.baseURL = options.baseURL;
   }

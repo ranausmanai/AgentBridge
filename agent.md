@@ -178,3 +178,30 @@ curl -s https://agentbridge.cc/api/apis
   - returns HTTP 429 with clear quota message (instead of opaque 500/no-body).
 - CLI interactive chat with Spotify:
   - tool call executes and reports 401 token-missing clearly.
+
+
+## 8) Spotify playlist creation loops / slow replies
+
+### Symptoms
+- After OAuth, `search` worked but `create_playlist` could loop/fail with guessed `user_id` values like:
+  - `user_id`
+  - `current_user`
+  - `<spotify__get_current_user>`
+- Chat felt slow due repeated LLM/tool iterations.
+
+### Root cause
+- Spotify playlist create endpoint needs path param `{user_id}`.
+- Model sometimes guessed placeholders instead of reliably extracting id from `get_current_user`.
+
+### Fixes implemented
+- Companion tool enforcement in tool selection:
+  - `/Users/usman/Documents/Vibed/clitest/packages/core/src/plugin-registry.ts`
+  - If `spotify.create_playlist` is selected, force include `spotify.get_current_user`.
+- Execution-layer auto-resolution for Spotify `user_id`:
+  - `/Users/usman/Documents/Vibed/clitest/packages/openapi/src/manifest-to-plugin.ts`
+  - For `spotify.create_playlist`, if `user_id` is missing/placeholder, call `GET /me` and inject real id before calling playlist create endpoint.
+
+### Expected impact
+- Fewer repeated tool attempts.
+- Faster response in playlist creation flow.
+- Better reliability after OAuth without asking user for `user_id`.

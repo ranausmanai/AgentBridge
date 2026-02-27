@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Engine, plugin registry, and conversation manager for AgentBridge",
   "type": "module",
   "main": "./dist/index.js",

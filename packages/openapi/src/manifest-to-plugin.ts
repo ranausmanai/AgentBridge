@@ -50,6 +50,7 @@ function createAction(
         let url = `${manifest.base_url}${action.path}`;
         const queryParams: Record<string, string> = {};
         const bodyParams: Record<string, any> = {};
+        const resolvedParams: Record<string, any> = { ...(params ?? {}) };
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -73,9 +74,47 @@ function createAction(
           }
         }
 
+        // Spotify convenience: if user_id path param is missing/placeholder for create playlist,
+        // resolve current user id via /me so the model does not need to guess it.
+        if (
+          manifest.name === 'spotify' &&
+          action.id === 'create_playlist' &&
+          action.path.includes('{user_id}')
+        ) {
+          const rawUserId = String(resolvedParams.user_id ?? '').trim();
+          const placeholderLike = !rawUserId
+            || rawUserId === 'user_id'
+            || rawUserId === 'current_user'
+            || rawUserId.startsWith('<');
+          if (placeholderLike) {
+            const meRes = await fetchFn(`${manifest.base_url}/me`, {
+              method: 'GET',
+              headers: {
+                Accept: 'application/json',
+                ...(headers['Authorization'] ? { Authorization: headers['Authorization'] } : {}),
+              },
+            });
+            const meText = await meRes.text();
+            let meJson: any = null;
+            try {
+              meJson = meText ? JSON.parse(meText) : null;
+            } catch {
+              meJson = null;
+            }
+            if (!meRes.ok || !meJson?.id) {
+              return {
+                success: false,
+                message: `Unable to resolve Spotify user_id automatically: ${typeof meJson === 'string' ? meJson : JSON.stringify(meJson ?? { status: meRes.status }).slice(0, 200)}`,
+                data: meJson ?? meText,
+              };
+            }
+            resolvedParams.user_id = meJson.id;
+          }
+        }
+
         // Distribute params to path, query, header, body
         for (const paramDef of action.parameters) {
-          const value = params[paramDef.name];
+          const value = resolvedParams[paramDef.name];
           if (value === undefined) continue;
 
           switch (paramDef.in) {

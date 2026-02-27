@@ -100,16 +100,19 @@ export class PluginRegistry {
         .filter(s => mentionedPlugins.has(s.pluginName.toLowerCase()))
         .slice(0, maxTools)
         .map(s => s.tool);
-      if (focused.length >= maxTools) return focused;
+      if (focused.length >= maxTools) return this.ensureCompanionTools(focused, allTools);
 
       const rest = scored
         .filter(s => !mentionedPlugins.has(s.pluginName.toLowerCase()))
         .slice(0, maxTools - focused.length)
         .map(s => s.tool);
-      return [...focused, ...rest];
+      return this.ensureCompanionTools([...focused, ...rest], allTools);
     }
 
-    return scored.slice(0, maxTools).map(s => s.tool);
+    return this.ensureCompanionTools(
+      scored.slice(0, maxTools).map(s => s.tool),
+      allTools,
+    );
   }
 
   /**
@@ -189,5 +192,30 @@ export class PluginRegistry {
     if (n.includes('update') || n.includes('edit') || n.includes('save')) return 7;
     if (n.includes('delete') || n.includes('remove')) return 6;
     return 4;
+  }
+
+  /**
+   * Ensure prerequisite tools are present for known multi-step actions.
+   */
+  private ensureCompanionTools(selected: LLMTool[], allTools: LLMTool[]): LLMTool[] {
+    const byName = new Map(allTools.map(t => [t.name, t]));
+    const names = new Set(selected.map(t => t.name));
+    const output = [...selected];
+
+    const ensure = (requiredName: string) => {
+      if (names.has(requiredName)) return;
+      const required = byName.get(requiredName);
+      if (!required) return;
+      if (output.length > 0) output.pop();
+      output.push(required);
+      names.add(requiredName);
+    };
+
+    // Spotify playlist creation requires real user id; model should fetch it first.
+    if (names.has('spotify__create_playlist')) {
+      ensure('spotify__get_current_user');
+    }
+
+    return output;
   }
 }

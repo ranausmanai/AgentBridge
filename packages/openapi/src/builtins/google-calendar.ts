@@ -1,0 +1,143 @@
+import type { AgentBridgeManifest } from '../types.js';
+
+export const googleCalendarManifest: AgentBridgeManifest = {
+  schema_version: '1.0',
+  name: 'google-calendar',
+  description: 'Google Calendar API — list calendars, manage events, and query availability',
+  version: '1.0.0',
+  logo_url: 'https://ssl.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png',
+  base_url: 'https://www.googleapis.com/calendar/v3',
+  auth: {
+    type: 'oauth2',
+    oauth2: {
+      authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth',
+      token_url: 'https://oauth2.googleapis.com/token',
+      scopes: {
+        'https://www.googleapis.com/auth/calendar.readonly': 'Read calendar data',
+        'https://www.googleapis.com/auth/calendar.events': 'Create and edit events',
+        'https://www.googleapis.com/auth/calendar': 'Full calendar access',
+      },
+    },
+    instructions: 'Create OAuth credentials in Google Cloud Console and use redirect URI http://127.0.0.1:8575/callback for CLI.',
+  },
+  actions: [
+    {
+      id: 'list_calendars',
+      description: 'List calendars in the authenticated account',
+      method: 'GET',
+      path: '/users/me/calendarList',
+      parameters: [
+        { name: 'minAccessRole', description: 'Minimum role: freeBusyReader, reader, writer, owner', in: 'query', required: false, type: 'string' },
+        { name: 'showHidden', description: 'Include hidden calendars', in: 'query', required: false, type: 'boolean', default: false },
+      ],
+    },
+    {
+      id: 'get_calendar',
+      description: 'Get details for a calendar by calendar ID',
+      method: 'GET',
+      path: '/calendars/{calendarId}',
+      parameters: [
+        { name: 'calendarId', description: 'Calendar ID (use primary for primary calendar)', in: 'path', required: true, type: 'string' },
+      ],
+    },
+    {
+      id: 'list_events',
+      description: 'List events in a calendar, optionally filtered by time range or text',
+      method: 'GET',
+      path: '/calendars/{calendarId}/events',
+      parameters: [
+        { name: 'calendarId', description: 'Calendar ID', in: 'path', required: true, type: 'string' },
+        { name: 'timeMin', description: 'Lower bound (RFC3339 timestamp)', in: 'query', required: false, type: 'string' },
+        { name: 'timeMax', description: 'Upper bound (RFC3339 timestamp)', in: 'query', required: false, type: 'string' },
+        { name: 'q', description: 'Free text search query', in: 'query', required: false, type: 'string' },
+        { name: 'singleEvents', description: 'Expand recurring events', in: 'query', required: false, type: 'boolean', default: true },
+        { name: 'orderBy', description: 'Sort order: startTime or updated', in: 'query', required: false, type: 'string', enum: ['startTime', 'updated'] },
+        { name: 'maxResults', description: 'Maximum results (1-2500)', in: 'query', required: false, type: 'integer', default: 20 },
+        { name: 'pageToken', description: 'Next page token', in: 'query', required: false, type: 'string' },
+      ],
+    },
+    {
+      id: 'get_event',
+      description: 'Get a calendar event by event ID',
+      method: 'GET',
+      path: '/calendars/{calendarId}/events/{eventId}',
+      parameters: [
+        { name: 'calendarId', description: 'Calendar ID', in: 'path', required: true, type: 'string' },
+        { name: 'eventId', description: 'Event ID', in: 'path', required: true, type: 'string' },
+      ],
+    },
+    {
+      id: 'create_event',
+      description: 'Create a new calendar event',
+      method: 'POST',
+      path: '/calendars/{calendarId}/events',
+      confirm: true,
+      parameters: [
+        { name: 'calendarId', description: 'Calendar ID', in: 'path', required: true, type: 'string' },
+        { name: 'summary', description: 'Event title', in: 'body', required: true, type: 'string' },
+        { name: 'description', description: 'Event description', in: 'body', required: false, type: 'string' },
+        { name: 'location', description: 'Event location', in: 'body', required: false, type: 'string' },
+        { name: 'start', description: 'Start object, e.g. {dateTime:\"...\",timeZone:\"...\"}', in: 'body', required: true, type: 'object' },
+        { name: 'end', description: 'End object, e.g. {dateTime:\"...\",timeZone:\"...\"}', in: 'body', required: true, type: 'object' },
+        { name: 'attendees', description: 'Array of attendee objects, e.g. [{email:\"a@b.com\"}]', in: 'body', required: false, type: 'array' },
+      ],
+    },
+    {
+      id: 'update_event',
+      description: 'Patch an existing calendar event',
+      method: 'PATCH',
+      path: '/calendars/{calendarId}/events/{eventId}',
+      confirm: true,
+      parameters: [
+        { name: 'calendarId', description: 'Calendar ID', in: 'path', required: true, type: 'string' },
+        { name: 'eventId', description: 'Event ID', in: 'path', required: true, type: 'string' },
+        { name: 'summary', description: 'Updated event title', in: 'body', required: false, type: 'string' },
+        { name: 'description', description: 'Updated event description', in: 'body', required: false, type: 'string' },
+        { name: 'location', description: 'Updated location', in: 'body', required: false, type: 'string' },
+        { name: 'start', description: 'Updated start object', in: 'body', required: false, type: 'object' },
+        { name: 'end', description: 'Updated end object', in: 'body', required: false, type: 'object' },
+        { name: 'attendees', description: 'Updated attendees array', in: 'body', required: false, type: 'array' },
+      ],
+    },
+    {
+      id: 'delete_event',
+      description: 'Delete an event from a calendar',
+      method: 'DELETE',
+      path: '/calendars/{calendarId}/events/{eventId}',
+      confirm: true,
+      parameters: [
+        { name: 'calendarId', description: 'Calendar ID', in: 'path', required: true, type: 'string' },
+        { name: 'eventId', description: 'Event ID', in: 'path', required: true, type: 'string' },
+      ],
+    },
+    {
+      id: 'quick_add_event',
+      description: 'Create an event from natural-language text',
+      method: 'POST',
+      path: '/calendars/{calendarId}/events/quickAdd',
+      confirm: true,
+      parameters: [
+        { name: 'calendarId', description: 'Calendar ID', in: 'path', required: true, type: 'string' },
+        { name: 'text', description: 'Natural language event text (e.g. Lunch with Sam tomorrow at 1pm)', in: 'query', required: true, type: 'string' },
+      ],
+    },
+    {
+      id: 'freebusy_query',
+      description: 'Query free/busy information across one or more calendars',
+      method: 'POST',
+      path: '/freeBusy',
+      parameters: [
+        { name: 'timeMin', description: 'Start of interval (RFC3339)', in: 'body', required: true, type: 'string' },
+        { name: 'timeMax', description: 'End of interval (RFC3339)', in: 'body', required: true, type: 'string' },
+        { name: 'items', description: 'Array of calendar objects, e.g. [{id:\"primary\"}]', in: 'body', required: true, type: 'array' },
+      ],
+    },
+    {
+      id: 'list_colors',
+      description: 'List available calendar and event color definitions',
+      method: 'GET',
+      path: '/colors',
+      parameters: [],
+    },
+  ],
+};

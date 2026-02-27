@@ -1,0 +1,132 @@
+import type { AgentBridgeManifest } from '../types.js';
+
+export const gmailManifest: AgentBridgeManifest = {
+  schema_version: '1.0',
+  name: 'gmail',
+  description: 'Gmail API — read, search, send, label, and manage email threads',
+  version: '1.0.0',
+  logo_url: 'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/logo_gmail_lockup_default_1x_r5.png',
+  base_url: 'https://gmail.googleapis.com/gmail/v1',
+  auth: {
+    type: 'oauth2',
+    oauth2: {
+      authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth',
+      token_url: 'https://oauth2.googleapis.com/token',
+      scopes: {
+        'https://www.googleapis.com/auth/gmail.readonly': 'Read messages and labels',
+        'https://www.googleapis.com/auth/gmail.modify': 'Read and modify messages/labels',
+        'https://www.googleapis.com/auth/gmail.send': 'Send email',
+        'https://www.googleapis.com/auth/gmail.compose': 'Create and manage drafts',
+        'https://www.googleapis.com/auth/gmail.labels': 'Create and manage labels',
+      },
+    },
+    instructions: 'Create OAuth credentials in Google Cloud Console and use redirect URI http://127.0.0.1:8575/callback for CLI.',
+  },
+  actions: [
+    {
+      id: 'get_profile',
+      description: 'Get the authenticated Gmail profile details',
+      method: 'GET',
+      path: '/users/me/profile',
+      parameters: [],
+    },
+    {
+      id: 'list_messages',
+      description: 'List messages in the mailbox, optionally filtered by search query or labels',
+      method: 'GET',
+      path: '/users/me/messages',
+      parameters: [
+        { name: 'q', description: 'Gmail search query (e.g. from:boss has:attachment newer_than:7d)', in: 'query', required: false, type: 'string' },
+        { name: 'labelIds', description: 'Comma-separated label IDs to filter', in: 'query', required: false, type: 'string' },
+        { name: 'maxResults', description: 'Maximum results (1-500)', in: 'query', required: false, type: 'integer', default: 20 },
+        { name: 'pageToken', description: 'Next page token', in: 'query', required: false, type: 'string' },
+        { name: 'includeSpamTrash', description: 'Include spam and trash folders', in: 'query', required: false, type: 'boolean', default: false },
+      ],
+    },
+    {
+      id: 'get_message',
+      description: 'Get a message by Gmail message ID',
+      method: 'GET',
+      path: '/users/me/messages/{id}',
+      parameters: [
+        { name: 'id', description: 'Gmail message ID', in: 'path', required: true, type: 'string' },
+        { name: 'format', description: 'Message format: full, metadata, minimal, raw', in: 'query', required: false, type: 'string', default: 'full', enum: ['full', 'metadata', 'minimal', 'raw'] },
+      ],
+    },
+    {
+      id: 'list_threads',
+      description: 'List email threads in the mailbox',
+      method: 'GET',
+      path: '/users/me/threads',
+      parameters: [
+        { name: 'q', description: 'Gmail search query', in: 'query', required: false, type: 'string' },
+        { name: 'labelIds', description: 'Comma-separated label IDs to filter', in: 'query', required: false, type: 'string' },
+        { name: 'maxResults', description: 'Maximum results (1-100)', in: 'query', required: false, type: 'integer', default: 20 },
+        { name: 'pageToken', description: 'Next page token', in: 'query', required: false, type: 'string' },
+      ],
+    },
+    {
+      id: 'get_thread',
+      description: 'Get an email thread by thread ID',
+      method: 'GET',
+      path: '/users/me/threads/{id}',
+      parameters: [
+        { name: 'id', description: 'Gmail thread ID', in: 'path', required: true, type: 'string' },
+        { name: 'format', description: 'Thread message format: full, metadata, minimal', in: 'query', required: false, type: 'string', default: 'full', enum: ['full', 'metadata', 'minimal'] },
+      ],
+    },
+    {
+      id: 'send_message',
+      description: 'Send an email message (requires RFC2822 raw content base64url encoded)',
+      method: 'POST',
+      path: '/users/me/messages/send',
+      confirm: true,
+      parameters: [
+        { name: 'raw', description: 'Base64url encoded raw RFC2822 email message', in: 'body', required: true, type: 'string' },
+        { name: 'threadId', description: 'Optional thread ID to reply in existing thread', in: 'body', required: false, type: 'string' },
+      ],
+    },
+    {
+      id: 'create_draft',
+      description: 'Create an email draft (requires RFC2822 raw content base64url encoded)',
+      method: 'POST',
+      path: '/users/me/drafts',
+      confirm: true,
+      parameters: [
+        { name: 'raw', description: 'Base64url encoded raw RFC2822 draft content', in: 'body', required: true, type: 'string' },
+        { name: 'threadId', description: 'Optional thread ID', in: 'body', required: false, type: 'string' },
+      ],
+    },
+    {
+      id: 'list_labels',
+      description: 'List all labels in the mailbox',
+      method: 'GET',
+      path: '/users/me/labels',
+      parameters: [],
+    },
+    {
+      id: 'create_label',
+      description: 'Create a Gmail label',
+      method: 'POST',
+      path: '/users/me/labels',
+      confirm: true,
+      parameters: [
+        { name: 'name', description: 'Label name', in: 'body', required: true, type: 'string' },
+        { name: 'labelListVisibility', description: 'Visibility in label list', in: 'body', required: false, type: 'string', enum: ['labelShow', 'labelShowIfUnread', 'labelHide'] },
+        { name: 'messageListVisibility', description: 'Visibility in message list', in: 'body', required: false, type: 'string', enum: ['show', 'hide'] },
+      ],
+    },
+    {
+      id: 'modify_message_labels',
+      description: 'Add or remove labels on a specific message',
+      method: 'POST',
+      path: '/users/me/messages/{id}/modify',
+      confirm: true,
+      parameters: [
+        { name: 'id', description: 'Gmail message ID', in: 'path', required: true, type: 'string' },
+        { name: 'addLabelIds', description: 'Label IDs to add', in: 'body', required: false, type: 'array' },
+        { name: 'removeLabelIds', description: 'Label IDs to remove', in: 'body', required: false, type: 'array' },
+      ],
+    },
+  ],
+};

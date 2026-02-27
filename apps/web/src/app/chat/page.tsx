@@ -14,6 +14,7 @@ interface ApiInfo {
   action_count: number;
   auth_type: string;
   is_builtin?: boolean;
+  builtin_oauth_ready?: boolean;
 }
 
 interface CredentialStatus {
@@ -149,9 +150,9 @@ export default function ChatPage() {
     await refreshCredentialStatus(selected.map(a => a.name));
   }
 
-  async function connectOAuth(apiName: string, isBuiltin?: boolean) {
+  async function connectOAuth(apiName: string, useBuiltinDefaults?: boolean) {
     const clientId = oauthClientIds[apiName]?.trim();
-    if (!isBuiltin && !clientId) {
+    if (!useBuiltinDefaults && !clientId) {
       setOauthError(`Enter client ID for ${apiName} first.`);
       return;
     }
@@ -159,7 +160,7 @@ export default function ChatPage() {
     setOauthNotice('');
     setOauthConnectingApi(apiName);
     try {
-      if (!isBuiltin) {
+      if (!useBuiltinDefaults) {
         const secret = oauthClientSecrets[apiName]?.trim();
         await fetch('/api/credentials', {
           method: 'POST',
@@ -391,7 +392,7 @@ export default function ChatPage() {
                     </div>
 
                     {api.auth_type === 'oauth2' ? (
-                      api.is_builtin ? (
+                      (api.is_builtin && api.builtin_oauth_ready) ? (
                         <div>
                           <button
                             onClick={() => connectOAuth(api.name, true)}
@@ -404,6 +405,11 @@ export default function ChatPage() {
                         </div>
                       ) : (
                         <div className="space-y-2">
+                          {api.is_builtin && (
+                            <p className="text-xs text-[var(--text-muted)]">
+                              This prebuilt needs your OAuth app credentials (Client ID and optional Client Secret).
+                            </p>
+                          )}
                           <input
                             type="text"
                             value={oauthClientIds[api.name] || ''}
@@ -565,6 +571,12 @@ function generateSuggestions(apiName: string): string[] {
   }
   if (name.includes('spotify') || name.includes('music')) {
     return ['Search for jazz tracks', 'Find albums by Miles Davis'];
+  }
+  if (name.includes('gmail') || name.includes('mail')) {
+    return ['Show unread emails from this week', 'Draft a follow-up email to the last sender'];
+  }
+  if (name.includes('calendar')) {
+    return ['What meetings do I have tomorrow?', 'Create a 30-minute focus block at 4 PM'];
   }
   if (name.includes('extract') || name.includes('scrape')) {
     return ['Extract data from example.com', 'Scrape the pricing page'];

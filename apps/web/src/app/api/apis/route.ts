@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAllPublicApis, getApiActions, deleteApi } from '@/lib/db';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { getBuiltinApi } from '@agentbridgeai/openapi';
 
 async function getUser() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -57,6 +58,7 @@ export async function GET() {
     auth_type: api.auth_type,
     action_count: getApiActions(api.id).length,
     is_builtin: api.owner_id === '__builtin__',
+    builtin_oauth_ready: api.owner_id === '__builtin__' ? !!getBuiltinApi(api.name)?.oauthClientId : false,
     created_at: api.created_at,
   }));
   return NextResponse.json(result);

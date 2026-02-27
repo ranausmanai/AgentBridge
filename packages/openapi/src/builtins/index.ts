@@ -1,5 +1,8 @@
 import type { AgentBridgeManifest } from '../types.js';
 import { spotifyManifest, SPOTIFY_CLIENT_ID, SPOTIFY_CLI_CALLBACK_PORT } from './spotify.js';
+import { gmailManifest } from './gmail.js';
+import { googleCalendarManifest } from './google-calendar.js';
+import { GOOGLE_CLIENT_ID, GOOGLE_CLI_CALLBACK_PORT } from './google-oauth.js';
 
 export interface BuiltinApi {
   manifest: AgentBridgeManifest;
@@ -16,6 +19,16 @@ const BUILTINS: Record<string, BuiltinApi> = {
     manifest: spotifyManifest,
     oauthClientId: SPOTIFY_CLIENT_ID,
     cliCallbackPort: SPOTIFY_CLI_CALLBACK_PORT,
+  },
+  gmail: {
+    manifest: gmailManifest,
+    oauthClientId: GOOGLE_CLIENT_ID,
+    cliCallbackPort: GOOGLE_CLI_CALLBACK_PORT,
+  },
+  'google-calendar': {
+    manifest: googleCalendarManifest,
+    oauthClientId: GOOGLE_CLIENT_ID,
+    cliCallbackPort: GOOGLE_CLI_CALLBACK_PORT,
   },
 };
 

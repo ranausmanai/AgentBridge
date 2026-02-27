@@ -18,6 +18,15 @@ function redirectToChat(request: Request, params: Record<string, string>) {
   return NextResponse.redirect(url.toString());
 }
 
+function getBuiltinClientSecret(apiName: string, builtinSecret?: string): string | undefined {
+  if (builtinSecret) return builtinSecret;
+  const env = process.env as Record<string, string | undefined>;
+  const normalized = apiName.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  return env[`BUILTIN_${normalized}_CLIENT_SECRET`]
+    || (apiName === 'gmail' || apiName === 'google-calendar' ? env.BUILTIN_GOOGLE_CLIENT_SECRET : undefined)
+    || (apiName === 'spotify' ? env.BUILTIN_SPOTIFY_CLIENT_SECRET : undefined);
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const error = url.searchParams.get('error');
@@ -46,8 +55,7 @@ export async function GET(request: Request) {
   const builtin = getBuiltinApi(session.apiName);
   const clientId = existing.oauth_client_id || existingOauth.client_id || builtin?.oauthClientId;
   const clientSecret = existing.oauth_client_secret || existingOauth.client_secret
-    || (builtin?.oauthClientSecret ? builtin.oauthClientSecret : undefined)
-    || process.env.BUILTIN_SPOTIFY_CLIENT_SECRET;
+    || getBuiltinClientSecret(session.apiName, builtin?.oauthClientSecret);
   if (!clientId) {
     return redirectToChat(request, { oauth: 'error', reason: 'missing_client_id' });
   }

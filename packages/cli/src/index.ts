@@ -389,7 +389,7 @@ program
       process.exit(1);
     }
 
-    const clientSecret = opts.clientSecret ?? current.oauth_client_secret ?? currentOauth.client_secret ?? (builtinDefaults ? '' : await askText('  OAuth client secret (optional): '));
+    const clientSecret = opts.clientSecret ?? current.oauth_client_secret ?? currentOauth.client_secret ?? (builtinDefaults?.clientId ? '' : await askText('  OAuth client secret (optional): '));
     const defaultScope = Object.keys(manifest.auth.oauth2.scopes ?? {}).join(' ');
     const scope = opts.scope ?? defaultScope;
 

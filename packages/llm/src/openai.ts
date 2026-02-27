@@ -13,6 +13,7 @@ export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;
   private model: string;
   private maxTokens: number;
+  private baseURL?: string;
 
   constructor(options: OpenAIProviderOptions = {}) {
     this.client = new OpenAI({
@@ -21,6 +22,7 @@ export class OpenAIProvider implements LLMProvider {
     });
     this.model = options.model ?? 'gpt-4o';
     this.maxTokens = options.maxTokens ?? 4096;
+    this.baseURL = options.baseURL;
   }
 
   async chat(messages: Message[], tools: LLMTool[]): Promise<LLMResponse> {
@@ -45,29 +47,37 @@ export class OpenAIProvider implements LLMProvider {
 
       return this.parseResponse(response);
     } catch (err: any) {
-      // Groq/some providers fail on tool calls with "failed_generation" —
-      // retry once without tools so the user still gets a text response.
-      if (err?.status === 400 && String(err?.message ?? '').includes('Failed to')) {
-        const fallback = await this.client.chat.completions.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          messages: openaiMessages,
-        });
-        return this.parseResponse(fallback);
+      const status = typeof err?.status === 'number' ? err.status : undefined;
+      const msg = String(err?.message ?? '');
+
+      // Retry strategy for tool-related provider failures:
+      // 1) try fewer tools, 2) then try no tools.
+      if (openaiTools.length > 0 && (status === 400 || status === 413)) {
+        try {
+          const reducedTools = openaiTools.slice(0, Math.max(1, Math.floor(openaiTools.length / 2)));
+          const reduced = await this.client.chat.completions.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            messages: openaiMessages,
+            tools: reducedTools,
+          });
+          return this.parseResponse(reduced);
+        } catch {}
+
+        // Groq often returns malformed function-call errors on tool mode.
+        if (status === 413 || status === 400 || msg.includes('Failed to') || msg.includes('no body')) {
+          try {
+            const fallback = await this.client.chat.completions.create({
+              model: this.model,
+              max_tokens: this.maxTokens,
+              messages: openaiMessages,
+            });
+            return this.parseResponse(fallback);
+          } catch {}
+        }
       }
-      // Some providers reject oversized tool payloads (e.g., 413).
-      // Retry with a smaller subset before failing hard.
-      if (err?.status === 413 && openaiTools.length > 0) {
-        const reducedTools = openaiTools.slice(0, Math.max(1, Math.floor(openaiTools.length / 2)));
-        const fallback = await this.client.chat.completions.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          messages: openaiMessages,
-          tools: reducedTools,
-        });
-        return this.parseResponse(fallback);
-      }
-      throw err;
+
+      throw this.enrichProviderError(err);
     }
   }
 
@@ -128,5 +138,31 @@ export class OpenAIProvider implements LLMProvider {
       text: message.content ?? undefined,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     };
+  }
+
+  private enrichProviderError(err: any): Error {
+    const status = typeof err?.status === 'number' ? err.status : 500;
+    const raw = String(err?.message ?? 'Provider request failed');
+    const provider = this.detectProvider();
+
+    let detail = raw;
+    if (status === 429) {
+      detail = `${provider} rate limit/quota exceeded (429). Check API key quota or billing.`;
+    } else if (status === 401) {
+      detail = `${provider} authentication failed (401). Check API key.`;
+    } else if (status === 400 && raw.includes('no body')) {
+      detail = `${provider} rejected the request (400). This is often model/tool compatibility or key restrictions.`;
+    }
+
+    const wrapped = new Error(detail);
+    (wrapped as any).status = status;
+    return wrapped;
+  }
+
+  private detectProvider(): string {
+    const b = (this.baseURL ?? '').toLowerCase();
+    if (b.includes('groq')) return 'Groq';
+    if (b.includes('generativelanguage.googleapis.com')) return 'Gemini';
+    return 'LLM provider';
   }
 }

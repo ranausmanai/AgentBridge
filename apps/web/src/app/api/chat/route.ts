@@ -153,7 +153,11 @@ export async function POST(request: Request) {
     const jsonResponse = NextResponse.json(responsePayload);
     return attachOwnerCookie(jsonResponse, owner);
   } catch (err: any) {
-    const response = NextResponse.json({ error: err.message }, { status: 500 });
+    const status = (typeof err?.status === 'number' && err.status >= 400 && err.status < 600)
+      ? err.status
+      : 500;
+    const message = String(err?.message ?? 'Chat request failed');
+    const response = NextResponse.json({ error: message }, { status });
     return attachOwnerCookie(response, owner);
   }
 }

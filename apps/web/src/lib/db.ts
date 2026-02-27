@@ -132,6 +132,12 @@ function seedBuiltinApis(db: Database.Database) {
     INSERT OR IGNORE INTO apis (name, description, version, base_url, auth_type, auth_config, manifest, owner_id, is_public)
     VALUES (?, ?, ?, ?, ?, ?, ?, '__builtin__', 1)
   `);
+  const updateApiStmt = db.prepare(`
+    UPDATE apis
+    SET description = ?, version = ?, base_url = ?, auth_type = ?, auth_config = ?, manifest = ?, owner_id = '__builtin__', is_public = 1, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
+  const deleteActionsStmt = db.prepare('DELETE FROM api_actions WHERE api_id = ?');
   const insertActionStmt = db.prepare(`
     INSERT INTO api_actions (api_id, action_id, description, method, path)
     VALUES (?, ?, ?, ?, ?)
@@ -139,19 +145,35 @@ function seedBuiltinApis(db: Database.Database) {
 
   for (const [, builtin] of Object.entries(builtins)) {
     const m = builtin.manifest;
-    const existing = db.prepare('SELECT id FROM apis WHERE name = ?').get(m.name) as { id: number } | undefined;
-    if (existing) continue;
+    const existing = db.prepare('SELECT id, owner_id FROM apis WHERE name = ?').get(m.name) as { id: number; owner_id: string | null } | undefined;
 
-    const result = insertApiStmt.run(
-      m.name,
-      m.description,
-      m.version,
-      m.base_url,
-      m.auth?.type ?? 'none',
-      m.auth ? JSON.stringify(m.auth) : null,
-      JSON.stringify(m),
-    );
-    const apiId = result.lastInsertRowid as number;
+    let apiId: number | null = null;
+
+    if (!existing) {
+      const result = insertApiStmt.run(
+        m.name,
+        m.description,
+        m.version,
+        m.base_url,
+        m.auth?.type ?? 'none',
+        m.auth ? JSON.stringify(m.auth) : null,
+        JSON.stringify(m),
+      );
+      apiId = Number(result.lastInsertRowid);
+    } else if (existing.owner_id === '__builtin__') {
+      updateApiStmt.run(
+        m.description,
+        m.version,
+        m.base_url,
+        m.auth?.type ?? 'none',
+        m.auth ? JSON.stringify(m.auth) : null,
+        JSON.stringify(m),
+        existing.id,
+      );
+      apiId = existing.id;
+      deleteActionsStmt.run(apiId);
+    }
+
     if (apiId) {
       for (const action of m.actions) {
         insertActionStmt.run(apiId, action.id, action.description, action.method, action.path);

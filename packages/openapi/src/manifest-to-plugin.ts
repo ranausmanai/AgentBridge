@@ -49,7 +49,7 @@ function createAction(
         // Build the URL
         let url = `${manifest.base_url}${action.path}`;
         const queryParams: Record<string, string> = {};
-        const bodyParams: Record<string, any> = {};
+        let bodyParams: Record<string, any> = {};
         const resolvedParams: Record<string, any> = { ...(params ?? {}) };
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -133,6 +133,23 @@ function createAction(
           }
         }
 
+        // Gmail convenience: accept plain email fields and/or plain RFC822 content,
+        // then build the API-ready JSON with base64url-encoded raw content.
+        if (
+          manifest.name === 'gmail' &&
+          (action.id === 'send_message' || action.id === 'create_draft')
+        ) {
+          const normalized = normalizeGmailOutboundBody(action.id, bodyParams);
+          if (!normalized.success) {
+            return {
+              success: false,
+              message: normalized.message,
+              data: { hint: 'Provide raw OR to/subject/body_text.' },
+            };
+          }
+          bodyParams = normalized.body;
+        }
+
         // Append query string
         const qs = new URLSearchParams(queryParams).toString();
         if (qs) url += `?${qs}`;
@@ -181,6 +198,99 @@ function createAction(
       }
     },
   };
+}
+
+function normalizeGmailOutboundBody(
+  actionId: string,
+  bodyParams: Record<string, any>,
+): { success: true; body: Record<string, any> } | { success: false; message: string } {
+  const rawInput = typeof bodyParams.raw === 'string' ? bodyParams.raw.trim() : '';
+  const threadId = typeof bodyParams.threadId === 'string' ? bodyParams.threadId.trim() : '';
+
+  let rawBase64Url = '';
+
+  if (rawInput) {
+    rawBase64Url = ensureBase64UrlRaw(rawInput);
+  } else {
+    const to = typeof bodyParams.to === 'string' ? bodyParams.to.trim() : '';
+    const cc = typeof bodyParams.cc === 'string' ? bodyParams.cc.trim() : '';
+    const bcc = typeof bodyParams.bcc === 'string' ? bodyParams.bcc.trim() : '';
+    const subject = typeof bodyParams.subject === 'string' ? bodyParams.subject.trim() : '';
+    const bodyText = typeof bodyParams.body_text === 'string' ? bodyParams.body_text : '';
+    const from = typeof bodyParams.from === 'string' ? bodyParams.from.trim() : '';
+
+    if (!to && !cc && !bcc) {
+      return { success: false, message: 'Gmail message needs at least one recipient (to/cc/bcc).' };
+    }
+
+    const rfc822 = buildRfc822Message({
+      to,
+      cc,
+      bcc,
+      subject,
+      bodyText,
+      from,
+    });
+    rawBase64Url = toBase64Url(rfc822);
+  }
+
+  if (actionId === 'create_draft') {
+    const message: Record<string, any> = { raw: rawBase64Url };
+    if (threadId) message.threadId = threadId;
+    return {
+      success: true,
+      body: { message },
+    };
+  }
+
+  const payload: Record<string, any> = { raw: rawBase64Url };
+  if (threadId) payload.threadId = threadId;
+  return {
+    success: true,
+    body: payload,
+  };
+}
+
+function buildRfc822Message(input: {
+  to?: string;
+  cc?: string;
+  bcc?: string;
+  subject?: string;
+  bodyText?: string;
+  from?: string;
+}): string {
+  const headers: string[] = [];
+  if (input.from) headers.push(`From: ${input.from}`);
+  if (input.to) headers.push(`To: ${input.to}`);
+  if (input.cc) headers.push(`Cc: ${input.cc}`);
+  if (input.bcc) headers.push(`Bcc: ${input.bcc}`);
+  headers.push(`Subject: ${input.subject ?? ''}`);
+  headers.push('MIME-Version: 1.0');
+  headers.push('Content-Type: text/plain; charset=UTF-8');
+
+  const body = normalizeLineEndings(input.bodyText ?? '');
+  return `${headers.join('\r\n')}\r\n\r\n${body}`;
+}
+
+function normalizeLineEndings(value: string): string {
+  return value.replace(/\r?\n/g, '\r\n');
+}
+
+function ensureBase64UrlRaw(value: string): string {
+  const compact = value.trim();
+  const isBase64Like = /^[A-Za-z0-9+/_-]+=*$/.test(compact) && !/[\r\n]/.test(compact) && compact.length > 20;
+  if (isBase64Like) {
+    return compact.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+  return toBase64Url(normalizeLineEndings(compact));
+}
+
+function toBase64Url(value: string): string {
+  return Buffer.from(value, 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
 }
 
 function buildZodSchema(parameters: ManifestParameter[]): z.ZodType<any> {

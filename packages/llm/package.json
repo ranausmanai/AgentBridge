@@ -33,7 +33,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentbridgeai/core": "^0.1.4",
+    "@agentbridgeai/core": "workspace:^",
     "@anthropic-ai/sdk": "^0.39.0",
     "openai": "^4.73.0"
   },

@@ -4,7 +4,7 @@ import type { AgentBridgeManifest, ManifestAction, ManifestParameter } from './t
 
 export interface PluginFromManifestOptions {
   /** Auth credentials to inject into requests */
-  credentials?: Record<string, string>;
+  credentials?: Record<string, any>;
   /** Custom fetch function (for testing or proxying) */
   fetchFn?: typeof fetch;
 }
@@ -35,7 +35,7 @@ function createAction(
   action: ManifestAction,
   manifest: AgentBridgeManifest,
   fetchFn: typeof fetch,
-  credentials?: Record<string, string>,
+  credentials?: Record<string, any>,
 ): Action {
   const parametersSchema = buildZodSchema(action.parameters);
 
@@ -62,6 +62,14 @@ function createAction(
           } else if (manifest.auth?.type === 'api_key' && manifest.auth.api_key_header) {
             const key = credentials.api_key ?? credentials.token ?? '';
             headers[manifest.auth.api_key_header] = key;
+          } else if (manifest.auth?.type === 'oauth2') {
+            const oauth = (credentials.oauth && typeof credentials.oauth === 'object')
+              ? credentials.oauth as Record<string, string>
+              : {};
+            const accessToken = credentials.access_token ?? oauth.access_token ?? credentials.token;
+            if (accessToken) {
+              headers['Authorization'] = `Bearer ${accessToken}`;
+            }
           }
         }
 

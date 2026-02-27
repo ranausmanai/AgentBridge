@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
-import { getApiByName, trackEvent } from '@/lib/db';
+import { getApiByName, getApiCredentials, trackEvent } from '@/lib/db';
 import { createEngine, type LLMProviderType } from '@/lib/bridge';
 import type { AgentBridgeManifest } from '@agentbridgeai/openapi';
+import { attachOwnerCookie, resolveRequestOwner } from '@/lib/auth';
 
 // Store sessions in memory (per-server instance)
 const sessions = new Map<string, { engineSessionId: string; engine: any }>();
 
 export async function POST(request: Request) {
+  let owner: Awaited<ReturnType<typeof resolveRequestOwner>> = null;
   try {
+    owner = await resolveRequestOwner(request, { allowAnonymous: true });
+    if (!owner) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       message,
@@ -28,13 +35,16 @@ export async function POST(request: Request) {
     };
 
     if (!message) {
-      return NextResponse.json({ error: 'message is required' }, { status: 400 });
+      const response = NextResponse.json({ error: 'message is required' }, { status: 400 });
+      return attachOwnerCookie(response, owner);
     }
     if (!llmKey) {
-      return NextResponse.json({ error: 'llmKey is required' }, { status: 400 });
+      const response = NextResponse.json({ error: 'llmKey is required' }, { status: 400 });
+      return attachOwnerCookie(response, owner);
     }
     if (!apis || apis.length === 0) {
-      return NextResponse.json({ error: 'Select at least one API' }, { status: 400 });
+      const response = NextResponse.json({ error: 'Select at least one API' }, { status: 400 });
+      return attachOwnerCookie(response, owner);
     }
 
     // Load manifests for selected APIs
@@ -47,14 +57,38 @@ export async function POST(request: Request) {
     }
 
     if (manifests.length === 0) {
-      return NextResponse.json({ error: 'No valid APIs found' }, { status: 400 });
+      const response = NextResponse.json({ error: 'No valid APIs found' }, { status: 400 });
+      return attachOwnerCookie(response, owner);
+    }
+
+    const storedCredentials = getApiCredentials(owner.ownerId, apis);
+    const mergedCredentials: Record<string, Record<string, string>> = {};
+
+    for (const apiName of apis) {
+      const fromStored = storedCredentials[apiName]?.credentials ?? {};
+      const fromBody = (apiCredentials && apiCredentials[apiName]) ? apiCredentials[apiName] : {};
+      const oauth = (fromStored.oauth && typeof fromStored.oauth === 'object') ? fromStored.oauth : {};
+      const token =
+        fromBody.token ||
+        fromBody.api_key ||
+        fromStored.token ||
+        fromStored.api_key ||
+        oauth.access_token;
+      const apiKey = fromBody.api_key || fromStored.api_key || token;
+
+      if (token || apiKey) {
+        mergedCredentials[apiName] = {
+          ...(token ? { token: String(token) } : {}),
+          ...(apiKey ? { api_key: String(apiKey) } : {}),
+        };
+      }
     }
 
     // Reuse or create session
     let session = sessionId ? sessions.get(sessionId) : undefined;
 
     if (!session) {
-      const engine = createEngine(llmProvider ?? 'openai', llmKey, manifests, llmModel, apiCredentials);
+      const engine = createEngine(llmProvider ?? 'openai', llmKey, manifests, llmModel, mergedCredentials);
       const engineSessionId = engine.createSession();
       const newSessionId = crypto.randomUUID();
       session = { engineSessionId, engine };
@@ -68,7 +102,7 @@ export async function POST(request: Request) {
 
       const toolCalls: { action: string; params: any }[] = [];
 
-      const response = await session.engine.chat(session.engineSessionId, message, {
+      const modelResponse = await session.engine.chat(session.engineSessionId, message, {
         onToolCall: (tc: any) => {
           toolCalls.push({
             action: `${tc.pluginName}.${tc.actionName}`,
@@ -84,16 +118,18 @@ export async function POST(request: Request) {
         if (apiName) trackEvent(apiName, 'action_call', actionId);
       }
 
-      return NextResponse.json({
-        response,
+      const responsePayload = {
+        response: modelResponse,
         sessionId: newSessionId,
         toolCalls,
-      });
+      };
+      const jsonResponse = NextResponse.json(responsePayload);
+      return attachOwnerCookie(jsonResponse, owner);
     }
 
     const toolCalls: { action: string; params: any }[] = [];
 
-    const response = await session.engine.chat(session.engineSessionId, message, {
+    const modelResponse = await session.engine.chat(session.engineSessionId, message, {
       onToolCall: (tc: any) => {
         toolCalls.push({
           action: `${tc.pluginName}.${tc.actionName}`,
@@ -109,12 +145,15 @@ export async function POST(request: Request) {
       if (apiName) trackEvent(apiName, 'action_call', actionId);
     }
 
-    return NextResponse.json({
-      response,
+    const responsePayload = {
+      response: modelResponse,
       sessionId,
       toolCalls,
-    });
+    };
+    const jsonResponse = NextResponse.json(responsePayload);
+    return attachOwnerCookie(jsonResponse, owner);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const response = NextResponse.json({ error: err.message }, { status: 500 });
+    return attachOwnerCookie(response, owner);
   }
 }

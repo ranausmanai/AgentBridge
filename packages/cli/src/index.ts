@@ -4,21 +4,29 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { AgentBridgeEngine } from '@agentbridgeai/core';
 import { ClaudeProvider, OpenAIProvider } from '@agentbridgeai/llm';
-import { APIRegistry, convertOpenAPIToManifest, discoverFromDomain } from '@agentbridgeai/openapi';
+import {
+  APIRegistry,
+  convertOpenAPIToManifest,
+  discoverFromDomain,
+  type AgentBridgeManifest,
+} from '@agentbridgeai/openapi';
 import { startRepl } from './repl.js';
 import { runInit } from './commands.js';
 import { CLI_VERSION } from './version.js';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { createServer } from 'http';
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import { spawn } from 'child_process';
 import Conf from 'conf';
+import { join } from 'path';
+import { homedir } from 'os';
 
 const REGISTRY_URL = process.env.AGENTBRIDGE_REGISTRY || 'https://agentbridge.cc';
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
 const GROQ_DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 const CLI_AUTH_PATH = '/api/cli-auth/start';
 const config = new Conf<{ registryToken?: string; registryUrl?: string }>({ projectName: 'agentbridge' });
+const LOCAL_REGISTRY_FILE = join(homedir(), '.agentbridge', 'registry.json');
 
 const program = new Command();
 
@@ -73,8 +81,12 @@ program
                 console.log(chalk.green(`  Auth configured for "${manifest.name}"`));
               } else if (manifest.auth) {
                 console.log(chalk.yellow(`  This API requires auth (${manifest.auth.type}).`));
-                console.log(chalk.gray(`  Run: agentbridge auth ${manifest.name} --token YOUR_TOKEN`));
-                console.log(chalk.gray(`  Or: agentbridge chat ${manifest.name} --token YOUR_TOKEN`));
+                if (manifest.auth.type === 'oauth2') {
+                  console.log(chalk.gray(`  Run: agentbridge connect ${manifest.name}`));
+                } else {
+                  console.log(chalk.gray(`  Run: agentbridge auth ${manifest.name} --token YOUR_TOKEN`));
+                  console.log(chalk.gray(`  Or: agentbridge chat ${manifest.name} --token YOUR_TOKEN`));
+                }
               }
             } else {
               console.log(chalk.yellow(`  No API found for "${apiName}" — chatting with installed APIs only.`));
@@ -115,7 +127,11 @@ program
       console.log(chalk.green(`Added "${manifest.name}" (${manifest.actions.length} actions)`));
       if (manifest.auth) {
         console.log(chalk.yellow(`This API requires auth (${manifest.auth.type}). Set credentials with:`));
-        console.log(chalk.gray(`  agentbridge auth ${manifest.name} --token YOUR_TOKEN`));
+        console.log(chalk.gray(
+          manifest.auth.type === 'oauth2'
+            ? `  agentbridge connect ${manifest.name}`
+            : `  agentbridge auth ${manifest.name} --token YOUR_TOKEN`,
+        ));
       }
     } catch (err: any) {
       console.error(chalk.red(`Failed to add API: ${err.message}`));
@@ -145,7 +161,11 @@ program
       }
       if (manifest.auth) {
         console.log(chalk.yellow(`\nThis API requires auth (${manifest.auth.type}). Set credentials with:`));
-        console.log(chalk.gray(`  agentbridge auth ${manifest.name} --token YOUR_TOKEN`));
+        console.log(chalk.gray(
+          manifest.auth.type === 'oauth2'
+            ? `  agentbridge connect ${manifest.name}`
+            : `  agentbridge auth ${manifest.name} --token YOUR_TOKEN`,
+        ));
       }
     } catch (err: any) {
       console.error(chalk.red(`Failed to import: ${err.message}`));
@@ -335,6 +355,107 @@ program
     }
   });
 
+// ---- OAuth connect for APIs that expose oauth2 in manifest ----
+program
+  .command('connect <name>')
+  .description('Connect an OAuth2 API and store access token locally')
+  .option('--client-id <id>', 'OAuth client ID')
+  .option('--client-secret <secret>', 'OAuth client secret (if required by provider)')
+  .option('--scope <scope>', 'Override OAuth scopes (space-separated)')
+  .action(async (name: string, opts: any) => {
+    const registry = new APIRegistry();
+    const manifest = registry.getManifest(name);
+
+    if (!manifest) {
+      console.error(chalk.red(`API "${name}" is not installed locally.`));
+      console.error(chalk.gray(`Install first: agentbridge chat ${name}`));
+      process.exit(1);
+    }
+    if (manifest.auth?.type !== 'oauth2' || !manifest.auth.oauth2?.authorization_url || !manifest.auth.oauth2.token_url) {
+      console.error(chalk.red(`"${name}" does not define oauth2 authorization/token URLs in its manifest.`));
+      process.exit(1);
+    }
+
+    const current = readStoredApiCredentials(name);
+    const currentOauth = (current.oauth && typeof current.oauth === 'object') ? current.oauth : {};
+
+    const clientId = opts.clientId || current.oauth_client_id || currentOauth.client_id || await askText('  OAuth client ID: ');
+    if (!clientId) {
+      console.error(chalk.red('  OAuth client ID is required.'));
+      process.exit(1);
+    }
+
+    const clientSecret = opts.clientSecret ?? current.oauth_client_secret ?? currentOauth.client_secret ?? await askText('  OAuth client secret (optional): ');
+    const defaultScope = Object.keys(manifest.auth.oauth2.scopes ?? {}).join(' ');
+    const scope = opts.scope ?? defaultScope;
+
+    const { verifier, challenge } = createPkcePair();
+    const state = randomUUID();
+
+    const callbackData = await waitForOAuthCode(state, manifest, clientId, challenge, scope);
+    if (!callbackData) {
+      console.error(chalk.red('  OAuth flow did not complete.'));
+      process.exit(1);
+    }
+
+    const tokenBody = new URLSearchParams();
+    tokenBody.set('grant_type', 'authorization_code');
+    tokenBody.set('code', callbackData.code);
+    tokenBody.set('redirect_uri', callbackData.redirectUri);
+    tokenBody.set('client_id', clientId);
+    tokenBody.set('code_verifier', verifier);
+    if (clientSecret) tokenBody.set('client_secret', clientSecret);
+
+    const tokenRes = await fetch(manifest.auth.oauth2.token_url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: tokenBody.toString(),
+    });
+
+    const tokenText = await tokenRes.text();
+    let tokenJson: any = null;
+    try {
+      tokenJson = tokenText ? JSON.parse(tokenText) : null;
+    } catch {
+      tokenJson = null;
+    }
+
+    if (!tokenRes.ok || !tokenJson?.access_token) {
+      console.error(chalk.red(`  Token exchange failed (${tokenRes.status}).`));
+      if (tokenJson?.error) console.error(chalk.gray(`  ${tokenJson.error}`));
+      process.exit(1);
+    }
+
+    const expiresAt = tokenJson.expires_in
+      ? new Date(Date.now() + Number(tokenJson.expires_in) * 1000).toISOString()
+      : undefined;
+
+    registry.setCredentials(name, {
+      ...current,
+      token: tokenJson.access_token,
+      oauth_client_id: clientId,
+      ...(clientSecret ? { oauth_client_secret: clientSecret } : {}),
+      oauth: {
+        ...(currentOauth || {}),
+        client_id: clientId,
+        ...(clientSecret ? { client_secret: clientSecret } : {}),
+        token_url: manifest.auth.oauth2.token_url,
+        authorization_url: manifest.auth.oauth2.authorization_url,
+        access_token: tokenJson.access_token,
+        refresh_token: tokenJson.refresh_token,
+        token_type: tokenJson.token_type ?? 'Bearer',
+        scope: tokenJson.scope ?? scope,
+        expires_at: expiresAt,
+      },
+    });
+
+    console.log(chalk.green(`  OAuth connected for "${name}".`));
+    console.log(chalk.gray(`  You can now run: agentbridge chat ${name}`));
+  });
+
 // ---- List registered APIs ----
 program
   .command('list')
@@ -433,7 +554,11 @@ program
         const manifest = await registry.addFromURL(manifestUrl);
         console.log(chalk.green(`  Installed "${manifest.name}" (${manifest.actions.length} actions)`));
         if (manifest.auth) {
-          console.log(chalk.yellow(`  Requires auth. Run: agentbridge chat ${manifest.name} --token YOUR_TOKEN`));
+          console.log(chalk.yellow(
+            manifest.auth.type === 'oauth2'
+              ? `  Requires OAuth. Run: agentbridge connect ${manifest.name}`
+              : `  Requires auth. Run: agentbridge chat ${manifest.name} --token YOUR_TOKEN`,
+          ));
         }
       }
     } catch (err: any) {
@@ -470,6 +595,112 @@ function getRegistryAuthHeaders(registryUrl: string): Record<string, string> {
   const token = envToken || (savedRegistry === registryUrl ? savedToken : undefined);
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
+}
+
+function readStoredApiCredentials(name: string): Record<string, any> {
+  try {
+    if (!existsSync(LOCAL_REGISTRY_FILE)) return {};
+    const raw = JSON.parse(readFileSync(LOCAL_REGISTRY_FILE, 'utf-8')) as {
+      entries?: Record<string, { credentials?: Record<string, any> }>;
+    };
+    return raw.entries?.[name]?.credentials ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function askText(question: string): Promise<string> {
+  const readline = await import('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>(resolve => rl.question(chalk.white(question), resolve));
+  rl.close();
+  return answer.trim();
+}
+
+function createPkcePair(): { verifier: string; challenge: string } {
+  const verifier = randomBytes(32).toString('base64url');
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
+  return { verifier, challenge };
+}
+
+async function waitForOAuthCode(
+  state: string,
+  manifest: AgentBridgeManifest,
+  clientId: string,
+  codeChallenge: string,
+  scope: string,
+): Promise<{ code: string; redirectUri: string } | null> {
+  return new Promise(resolve => {
+    const server = createServer((req, res) => {
+      const reqUrl = new URL(req.url || '/', 'http://127.0.0.1');
+      if (reqUrl.pathname !== '/callback') {
+        res.statusCode = 404;
+        res.end('Not found');
+        return;
+      }
+
+      const code = reqUrl.searchParams.get('code');
+      const returnedState = reqUrl.searchParams.get('state');
+      const error = reqUrl.searchParams.get('error');
+      const ok = !!code && returnedState === state && !error;
+
+      res.statusCode = ok ? 200 : 400;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.end(ok
+        ? '<h2>AgentBridge OAuth connection complete.</h2><p>You can close this tab and return to terminal.</p>'
+        : `<h2>OAuth failed.</h2><p>${error || 'Invalid state or missing code.'}</p>`);
+
+      const address = server.address();
+      const redirectUri = address && typeof address !== 'string'
+        ? `http://127.0.0.1:${address.port}/callback`
+        : '';
+
+      server.close();
+      if (!ok) {
+        resolve(null);
+        return;
+      }
+      resolve({ code: code!, redirectUri });
+    });
+
+    server.listen(0, '127.0.0.1', async () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close();
+        resolve(null);
+        return;
+      }
+
+      const redirectUri = `http://127.0.0.1:${address.port}/callback`;
+      const authUrl = new URL(manifest.auth!.oauth2!.authorization_url);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('client_id', clientId);
+      authUrl.searchParams.set('redirect_uri', redirectUri);
+      authUrl.searchParams.set('state', state);
+      authUrl.searchParams.set('code_challenge', codeChallenge);
+      authUrl.searchParams.set('code_challenge_method', 'S256');
+      if (scope?.trim()) authUrl.searchParams.set('scope', scope.trim());
+
+      console.log('');
+      console.log(chalk.bold.cyan('  OAuth Connect'));
+      console.log(chalk.gray(`  API: ${manifest.name}`));
+      console.log(chalk.gray('  Complete authorization in your browser:'));
+      console.log(chalk.white(`  ${authUrl.toString()}`));
+
+      const opened = await openBrowser(authUrl.toString());
+      if (opened) {
+        console.log(chalk.gray('  Opened browser window.'));
+      } else {
+        console.log(chalk.yellow('  Could not open browser automatically.'));
+      }
+
+      const timeout = setTimeout(() => {
+        server.close();
+        resolve(null);
+      }, 240000);
+      server.on('close', () => clearTimeout(timeout));
+    });
+  });
 }
 
 async function promptYesNo(question: string, defaultYes = true): Promise<boolean> {

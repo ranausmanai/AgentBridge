@@ -15,6 +15,13 @@ interface ApiInfo {
   auth_type: string;
 }
 
+interface CredentialStatus {
+  configured: boolean;
+  oauthConnected: boolean;
+  hasClientConfig: boolean;
+  updatedAt?: string;
+}
+
 const LLM_PROVIDERS = [
   { id: 'groq', label: 'Groq (free)', placeholder: 'gsk_...', hint: 'Free at console.groq.com' },
   { id: 'openai', label: 'OpenAI', placeholder: 'sk-...', hint: 'platform.openai.com' },
@@ -31,6 +38,13 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [apiCredentials, setApiCredentials] = useState<Record<string, string>>({});
+  const [oauthClientIds, setOauthClientIds] = useState<Record<string, string>>({});
+  const [oauthClientSecrets, setOauthClientSecrets] = useState<Record<string, string>>({});
+  const [credentialStatus, setCredentialStatus] = useState<Record<string, CredentialStatus>>({});
+  const [vaultEnabled, setVaultEnabled] = useState(true);
+  const [oauthNotice, setOauthNotice] = useState('');
+  const [oauthError, setOauthError] = useState('');
+  const [oauthConnectingApi, setOauthConnectingApi] = useState('');
   const [configured, setConfigured] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -41,18 +55,49 @@ export default function ChatPage() {
       if (data.length > 0 && data.length <= 3) {
         setSelectedApis(new Set(data.map((a: ApiInfo) => a.name)));
       }
+      refreshCredentialStatus(data.map((a: ApiInfo) => a.name));
     });
     const savedKey = localStorage.getItem('agentbridge_llm_key');
     const savedProvider = localStorage.getItem('agentbridge_llm_provider');
     if (savedKey) setApiKey(savedKey);
     if (savedProvider) setProvider(savedProvider);
-    const savedCreds = localStorage.getItem('agentbridge_api_creds');
-    if (savedCreds) try { setApiCredentials(JSON.parse(savedCreds)); } catch {}
+
+    const params = new URLSearchParams(window.location.search);
+    const oauth = params.get('oauth');
+    const api = params.get('api');
+    const reason = params.get('reason');
+    if (oauth === 'connected' && api) {
+      setOauthNotice(`OAuth connected for ${api}.`);
+      params.delete('oauth');
+      params.delete('api');
+      params.delete('reason');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`);
+    } else if (oauth === 'error') {
+      setOauthError(`OAuth failed${reason ? `: ${reason}` : ''}`);
+      params.delete('oauth');
+      params.delete('api');
+      params.delete('reason');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`);
+    }
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  async function refreshCredentialStatus(apiNames?: string[]) {
+    const names = apiNames ?? apis.map(a => a.name);
+    if (names.length === 0) return;
+    const res = await fetch(`/api/credentials?apis=${encodeURIComponent(names.join(','))}`);
+    const data = await res.json();
+    if (!res.ok || data.configured === false) {
+      setVaultEnabled(false);
+      setCredentialStatus({});
+      return;
+    }
+    setVaultEnabled(true);
+    setCredentialStatus(data.statuses || {});
+  }
 
   function toggleApi(name: string) {
     setSelectedApis(prev => {
@@ -63,13 +108,79 @@ export default function ChatPage() {
     });
   }
 
-  function handleConfigure() {
+  async function persistSecureCredentials() {
+    if (!vaultEnabled) return;
+
+    const selected = apis.filter(api => selectedApis.has(api.name));
+    for (const api of selected) {
+      if (api.auth_type === 'oauth2') {
+        const clientId = oauthClientIds[api.name]?.trim();
+        const clientSecret = oauthClientSecrets[api.name]?.trim();
+        if (!clientId) continue;
+        await fetch('/api/credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiName: api.name,
+            credentials: {
+              oauth_client_id: clientId,
+              ...(clientSecret ? { oauth_client_secret: clientSecret } : {}),
+            },
+          }),
+        });
+      } else {
+        const token = apiCredentials[api.name]?.trim();
+        if (!token) continue;
+        await fetch('/api/credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiName: api.name,
+            credentials: {
+              token,
+              api_key: token,
+            },
+          }),
+        });
+      }
+    }
+    await refreshCredentialStatus(selected.map(a => a.name));
+  }
+
+  async function connectOAuth(apiName: string) {
+    const clientId = oauthClientIds[apiName]?.trim();
+    if (!clientId) {
+      setOauthError(`Enter client ID for ${apiName} first.`);
+      return;
+    }
+    setOauthError('');
+    setOauthNotice('');
+    setOauthConnectingApi(apiName);
+    try {
+      const secret = oauthClientSecrets[apiName]?.trim();
+      await fetch('/api/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiName,
+          credentials: {
+            oauth_client_id: clientId,
+            ...(secret ? { oauth_client_secret: secret } : {}),
+          },
+        }),
+      });
+      window.location.href = `/api/oauth/start?api=${encodeURIComponent(apiName)}`;
+    } finally {
+      setOauthConnectingApi('');
+    }
+  }
+
+  async function handleConfigure() {
     if (!apiKey.trim()) return;
     localStorage.setItem('agentbridge_llm_key', apiKey);
     localStorage.setItem('agentbridge_llm_provider', provider);
-    if (Object.keys(apiCredentials).length > 0) {
-      localStorage.setItem('agentbridge_api_creds', JSON.stringify(apiCredentials));
-    }
+    await persistSecureCredentials();
+    localStorage.removeItem('agentbridge_api_creds');
     setConfigured(true);
   }
 
@@ -89,7 +200,7 @@ export default function ChatPage() {
           llmProvider: provider,
           llmKey: apiKey,
           sessionId,
-          apiCredentials: Object.fromEntries(
+          apiCredentials: vaultEnabled ? {} : Object.fromEntries(
             Object.entries(apiCredentials)
               .filter(([, v]) => v)
               .map(([name, token]) => [name, { token, api_key: token }])
@@ -227,26 +338,74 @@ export default function ChatPage() {
               API Credentials
             </label>
             <p className="text-xs text-[var(--text-muted)] mb-3">
-              These APIs require authentication to make real calls.
+              {vaultEnabled
+                ? 'Credentials are encrypted and stored on the server for hosted secure calling.'
+                : 'Server vault is not configured. Credentials will be sent per request only.'}
             </p>
+            {oauthNotice && (
+              <p className="text-xs text-green-600 dark:text-green-400 mb-2">{oauthNotice}</p>
+            )}
+            {oauthError && (
+              <p className="text-xs text-red-600 dark:text-red-400 mb-2">{oauthError}</p>
+            )}
             <div className="space-y-3">
-              {apisNeedingAuth.map(api => (
-                <div key={api.name} className="bg-[var(--bg-surface)] border border-[var(--border-hover)] rounded-lg p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[var(--text-primary)] text-sm font-medium">{api.name}</span>
-                    <span className="text-xs bg-[var(--warning-bg)] text-[var(--warning-text)] px-2 py-0.5 rounded">
-                      {api.auth_type}
-                    </span>
+              {apisNeedingAuth.map(api => {
+                const status = credentialStatus[api.name];
+                return (
+                  <div key={api.name} className="bg-[var(--bg-surface)] border border-[var(--border-hover)] rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[var(--text-primary)] text-sm font-medium">{api.name}</span>
+                      <span className="text-xs bg-[var(--warning-bg)] text-[var(--warning-text)] px-2 py-0.5 rounded">
+                        {api.auth_type}
+                      </span>
+                      {status?.configured && (
+                        <span className="text-xs bg-green-500/10 text-green-700 dark:text-green-300 px-2 py-0.5 rounded">
+                          saved
+                        </span>
+                      )}
+                      {status?.oauthConnected && (
+                        <span className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+                          connected
+                        </span>
+                      )}
+                    </div>
+
+                    {api.auth_type === 'oauth2' ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={oauthClientIds[api.name] || ''}
+                          onChange={e => setOauthClientIds(prev => ({ ...prev, [api.name]: e.target.value }))}
+                          placeholder="OAuth client ID"
+                          className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                        />
+                        <input
+                          type="password"
+                          value={oauthClientSecrets[api.name] || ''}
+                          onChange={e => setOauthClientSecrets(prev => ({ ...prev, [api.name]: e.target.value }))}
+                          placeholder="OAuth client secret (optional)"
+                          className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                        />
+                        <button
+                          onClick={() => connectOAuth(api.name)}
+                          disabled={oauthConnectingApi === api.name}
+                          className="text-xs bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-black font-medium px-3 py-1.5 rounded-lg transition"
+                        >
+                          {oauthConnectingApi === api.name ? 'Opening OAuth...' : `Connect ${api.name}`}
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        type="password"
+                        value={apiCredentials[api.name] || ''}
+                        onChange={e => setApiCredentials(prev => ({ ...prev, [api.name]: e.target.value }))}
+                        placeholder={api.auth_type === 'bearer' ? 'Bearer token...' : 'API key...'}
+                        className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                      />
+                    )}
                   </div>
-                  <input
-                    type="password"
-                    value={apiCredentials[api.name] || ''}
-                    onChange={e => setApiCredentials(prev => ({ ...prev, [api.name]: e.target.value }))}
-                    placeholder={api.auth_type === 'bearer' ? 'Bearer token...' : 'API key...'}
-                    className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

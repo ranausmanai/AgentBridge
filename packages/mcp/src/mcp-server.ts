@@ -5,7 +5,7 @@ import { manifestToMCPTools } from './manifest-to-mcp.js';
 
 export interface MCPServerOptions {
   manifests: AgentBridgeManifest[];
-  credentials?: Record<string, Record<string, string>>;
+  credentials?: Record<string, Record<string, any>>;
 }
 
 /**
@@ -74,7 +74,7 @@ async function executeAction(
   manifest: AgentBridgeManifest,
   action: ManifestAction,
   params: Record<string, any>,
-  creds?: Record<string, string>,
+  creds?: Record<string, any>,
 ): Promise<string> {
   try {
     let url = `${manifest.base_url}${action.path}`;
@@ -91,6 +91,14 @@ async function executeAction(
         headers['Authorization'] = `Bearer ${creds.token}`;
       } else if (manifest.auth?.type === 'api_key' && manifest.auth.api_key_header) {
         headers[manifest.auth.api_key_header] = creds.api_key ?? creds.token ?? '';
+      } else if (manifest.auth?.type === 'oauth2') {
+        const oauth = (creds.oauth && typeof creds.oauth === 'object')
+          ? creds.oauth as Record<string, string>
+          : {};
+        const accessToken = creds.access_token ?? oauth.access_token ?? creds.token;
+        if (accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        }
       }
     }
 

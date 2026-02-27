@@ -16,7 +16,7 @@ interface RegistryEntry {
   /** When it was last fetched */
   lastFetched: string;
   /** Stored credentials for this API */
-  credentials?: Record<string, string>;
+  credentials?: Record<string, any>;
 }
 
 interface RegistryData {
@@ -83,11 +83,18 @@ export class APIRegistry {
   /**
    * Set credentials for a registered API.
    */
-  setCredentials(name: string, credentials: Record<string, string>): void {
+  setCredentials(name: string, credentials: Record<string, any>): void {
     const entry = this.data.entries[name];
     if (!entry) throw new Error(`API "${name}" not found in registry`);
     entry.credentials = credentials;
     this.save();
+  }
+
+  /**
+   * Get stored credentials for a registered API.
+   */
+  getCredentials(name: string): Record<string, any> | undefined {
+    return this.data.entries[name]?.credentials;
   }
 
   /**

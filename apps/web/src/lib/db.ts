@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { createHash, randomBytes } from 'crypto';
+import { decryptJson, encryptJson, isCredentialVaultConfigured } from './crypto';
 
 const DB_PATH = process.env.DATABASE_PATH || join(process.cwd(), 'agentbridge.db');
 
@@ -89,6 +90,36 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_cli_tokens_owner ON cli_tokens(owner_id);
     CREATE INDEX IF NOT EXISTS idx_cli_tokens_expiry ON cli_tokens(expires_at);
+  `);
+
+  // Encrypted consumer credential vault (owner + API scoped)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS api_credentials (
+      owner_id TEXT NOT NULL,
+      api_name TEXT NOT NULL,
+      ciphertext TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      tag TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (owner_id, api_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_credentials_owner ON api_credentials(owner_id);
+  `);
+
+  // OAuth browser flow sessions
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS oauth_sessions (
+      state TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      api_name TEXT NOT NULL,
+      code_verifier TEXT NOT NULL,
+      redirect_uri TEXT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_oauth_sessions_owner ON oauth_sessions(owner_id);
+    CREATE INDEX IF NOT EXISTS idx_oauth_sessions_expiry ON oauth_sessions(expires_at);
   `);
 }
 
@@ -235,6 +266,169 @@ export function verifyCliToken(token: string): { ownerId: string } | null {
   ).run(tokenHash);
 
   return { ownerId: row.owner_id };
+}
+
+// ---- Encrypted API Credentials ----
+
+export interface ApiCredential {
+  apiName: string;
+  credentials: Record<string, any>;
+  updatedAt: string;
+}
+
+export function upsertApiCredential(
+  ownerId: string,
+  apiName: string,
+  credentials: Record<string, any>,
+): void {
+  if (!isCredentialVaultConfigured()) {
+    throw new Error('Credential vault is not configured. Set AGENTBRIDGE_ENCRYPTION_KEY.');
+  }
+  const sealed = encryptJson(credentials);
+  getDb().prepare(`
+    INSERT INTO api_credentials (owner_id, api_name, ciphertext, iv, tag)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(owner_id, api_name) DO UPDATE SET
+      ciphertext = excluded.ciphertext,
+      iv = excluded.iv,
+      tag = excluded.tag,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(ownerId, apiName, sealed.ciphertext, sealed.iv, sealed.tag);
+}
+
+export function getApiCredential(ownerId: string, apiName: string): ApiCredential | null {
+  const row = getDb().prepare(`
+    SELECT api_name, ciphertext, iv, tag, updated_at
+    FROM api_credentials
+    WHERE owner_id = ? AND api_name = ?
+  `).get(ownerId, apiName) as {
+    api_name: string;
+    ciphertext: string;
+    iv: string;
+    tag: string;
+    updated_at: string;
+  } | undefined;
+
+  if (!row) return null;
+  const credentials = decryptJson<Record<string, any>>({
+    ciphertext: row.ciphertext,
+    iv: row.iv,
+    tag: row.tag,
+  });
+  return {
+    apiName: row.api_name,
+    credentials,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function getApiCredentials(
+  ownerId: string,
+  apiNames?: string[],
+): Record<string, ApiCredential> {
+  const db = getDb();
+  let rows: Array<{
+    api_name: string;
+    ciphertext: string;
+    iv: string;
+    tag: string;
+    updated_at: string;
+  }> = [];
+
+  if (apiNames && apiNames.length > 0) {
+    const placeholders = apiNames.map(() => '?').join(',');
+    rows = db.prepare(`
+      SELECT api_name, ciphertext, iv, tag, updated_at
+      FROM api_credentials
+      WHERE owner_id = ? AND api_name IN (${placeholders})
+    `).all(ownerId, ...apiNames) as typeof rows;
+  } else {
+    rows = db.prepare(`
+      SELECT api_name, ciphertext, iv, tag, updated_at
+      FROM api_credentials
+      WHERE owner_id = ?
+    `).all(ownerId) as typeof rows;
+  }
+
+  const result: Record<string, ApiCredential> = {};
+  for (const row of rows) {
+    try {
+      result[row.api_name] = {
+        apiName: row.api_name,
+        updatedAt: row.updated_at,
+        credentials: decryptJson<Record<string, any>>({
+          ciphertext: row.ciphertext,
+          iv: row.iv,
+          tag: row.tag,
+        }),
+      };
+    } catch {
+      // Skip corrupted rows to avoid breaking chat requests.
+    }
+  }
+
+  return result;
+}
+
+export function deleteApiCredential(ownerId: string, apiName: string): void {
+  getDb().prepare(
+    'DELETE FROM api_credentials WHERE owner_id = ? AND api_name = ?',
+  ).run(ownerId, apiName);
+}
+
+// ---- OAuth flow sessions ----
+
+export interface OAuthSession {
+  state: string;
+  ownerId: string;
+  apiName: string;
+  codeVerifier: string;
+  redirectUri: string;
+  expiresAt: string;
+}
+
+export function createOAuthSession(
+  ownerId: string,
+  apiName: string,
+  state: string,
+  codeVerifier: string,
+  redirectUri: string,
+  ttlMinutes = 10,
+): void {
+  const expiresAt = new Date(Date.now() + ttlMinutes * 60_000).toISOString();
+  getDb().prepare(`
+    INSERT INTO oauth_sessions (state, owner_id, api_name, code_verifier, redirect_uri, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(state, ownerId, apiName, codeVerifier, redirectUri, expiresAt);
+}
+
+export function consumeOAuthSession(state: string): OAuthSession | null {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT state, owner_id, api_name, code_verifier, redirect_uri, expires_at
+    FROM oauth_sessions
+    WHERE state = ?
+  `).get(state) as {
+    state: string;
+    owner_id: string;
+    api_name: string;
+    code_verifier: string;
+    redirect_uri: string;
+    expires_at: string;
+  } | undefined;
+
+  if (!row) return null;
+  db.prepare('DELETE FROM oauth_sessions WHERE state = ?').run(state);
+
+  if (row.expires_at <= new Date().toISOString()) return null;
+  return {
+    state: row.state,
+    ownerId: row.owner_id,
+    apiName: row.api_name,
+    codeVerifier: row.code_verifier,
+    redirectUri: row.redirect_uri,
+    expiresAt: row.expires_at,
+  };
 }
 
 // ---- Analytics ----

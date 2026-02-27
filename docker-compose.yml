@@ -11,6 +11,8 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_PATH=/app/apps/web/data/agentbridge.db
+      # Required for encrypted credential vault + OAuth token storage.
+      - AGENTBRIDGE_ENCRYPTION_KEY=change-me-to-a-long-random-secret
       # Supabase auth (optional — omit to run without login)
       # - NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
       # - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...

@@ -29,6 +29,8 @@ const GEMINI_DEFAULT_MODEL = 'gemini-2.0-flash';
 const CLI_AUTH_PATH = '/api/cli-auth/start';
 const config = new Conf<{ registryToken?: string; registryUrl?: string }>({ projectName: 'agentbridge' });
 const LOCAL_REGISTRY_FILE = join(homedir(), '.agentbridge', 'registry.json');
+const DEFAULT_MCP_CLIENTS = ['claude', 'codex', 'cursor', 'windsurf'] as const;
+type McpClient = (typeof DEFAULT_MCP_CLIENTS)[number];
 
 const program = new Command();
 
@@ -43,6 +45,40 @@ function parseMaybeJson(text: string): any | null {
 function isLikelyHtml(text: string): boolean {
   const v = text.trimStart().toLowerCase();
   return v.startsWith('<!doctype html') || v.startsWith('<html');
+}
+
+function isExitSignal(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return v === '/exit' || v === 'exit' || v === 'quit';
+}
+
+function parseMcpClients(input: string): McpClient[] {
+  const normalized = (input || 'all').trim().toLowerCase();
+  if (!normalized || normalized === 'all') return [...DEFAULT_MCP_CLIENTS];
+
+  const parts = normalized.split(',').map(s => s.trim()).filter(Boolean);
+  const clients: McpClient[] = [];
+  for (const part of parts) {
+    if ((DEFAULT_MCP_CLIENTS as readonly string[]).includes(part) && !clients.includes(part as McpClient)) {
+      clients.push(part as McpClient);
+    }
+  }
+  return clients;
+}
+
+function buildMcpSnippet(apiName: string): string {
+  return JSON.stringify({
+    mcpServers: {
+      [apiName]: {
+        command: 'npx',
+        args: ['@agentbridgeai/mcp', '--api', apiName],
+      },
+    },
+  }, null, 2);
+}
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 program
@@ -366,99 +402,151 @@ program
   .option('--client-secret <secret>', 'OAuth client secret (if required by provider)')
   .option('--scope <scope>', 'Override OAuth scopes (space-separated)')
   .action(async (name: string, opts: any) => {
-    const registry = new APIRegistry();
-    const manifest = registry.getManifest(name);
-
-    if (!manifest) {
-      console.error(chalk.red(`API "${name}" is not installed locally.`));
-      console.error(chalk.gray(`Install first: agentbridge chat ${name}`));
-      process.exit(1);
-    }
-    if (manifest.auth?.type !== 'oauth2' || !manifest.auth.oauth2?.authorization_url || !manifest.auth.oauth2.token_url) {
-      console.error(chalk.red(`"${name}" does not define oauth2 authorization/token URLs in its manifest.`));
-      process.exit(1);
-    }
-
-    const current = readStoredApiCredentials(name);
-    const currentOauth = (current.oauth && typeof current.oauth === 'object') ? current.oauth : {};
-
-    const builtinDefaults = registry.getBuiltinDefaults(name);
-    const clientId = opts.clientId || current.oauth_client_id || currentOauth.client_id || builtinDefaults?.clientId || await askText('  OAuth client ID: ');
-    if (!clientId) {
-      console.error(chalk.red('  OAuth client ID is required.'));
-      process.exit(1);
-    }
-
-    const clientSecret = opts.clientSecret ?? current.oauth_client_secret ?? currentOauth.client_secret ?? (builtinDefaults?.clientId ? '' : await askText('  OAuth client secret (optional): '));
-    const defaultScope = Object.keys(manifest.auth.oauth2.scopes ?? {}).join(' ');
-    const scope = opts.scope ?? defaultScope;
-
-    const { verifier, challenge } = createPkcePair();
-    const state = randomUUID();
-
-    const fixedPort = builtinDefaults?.callbackPort;
-    const callbackData = await waitForOAuthCode(state, manifest, clientId, challenge, scope, fixedPort);
-    if (!callbackData) {
-      console.error(chalk.red('  OAuth flow did not complete.'));
-      process.exit(1);
-    }
-
-    const tokenBody = new URLSearchParams();
-    tokenBody.set('grant_type', 'authorization_code');
-    tokenBody.set('code', callbackData.code);
-    tokenBody.set('redirect_uri', callbackData.redirectUri);
-    tokenBody.set('client_id', clientId);
-    tokenBody.set('code_verifier', verifier);
-    if (clientSecret) tokenBody.set('client_secret', clientSecret);
-
-    const tokenRes = await fetch(manifest.auth.oauth2.token_url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
-      },
-      body: tokenBody.toString(),
-    });
-
-    const tokenText = await tokenRes.text();
-    let tokenJson: any = null;
     try {
-      tokenJson = tokenText ? JSON.parse(tokenText) : null;
-    } catch {
-      tokenJson = null;
-    }
-
-    if (!tokenRes.ok || !tokenJson?.access_token) {
-      console.error(chalk.red(`  Token exchange failed (${tokenRes.status}).`));
-      if (tokenJson?.error) console.error(chalk.gray(`  ${tokenJson.error}`));
+      await connectOAuthApi(name, {
+        clientId: opts.clientId,
+        clientSecret: opts.clientSecret,
+        scope: opts.scope,
+      });
+      console.log(chalk.green(`  OAuth connected for "${name}".`));
+      console.log(chalk.gray(`  You can now run: agentbridge chat ${name}`));
+    } catch (err: any) {
+      console.error(chalk.red(`  OAuth failed: ${err.message}`));
       process.exit(1);
     }
+  });
 
-    const expiresAt = tokenJson.expires_in
-      ? new Date(Date.now() + Number(tokenJson.expires_in) * 1000).toISOString()
-      : undefined;
+const mcpCommand = program
+  .command('mcp')
+  .description('MCP onboarding and configuration helpers');
 
-    registry.setCredentials(name, {
-      ...current,
-      token: tokenJson.access_token,
-      oauth_client_id: clientId,
-      ...(clientSecret ? { oauth_client_secret: clientSecret } : {}),
-      oauth: {
-        ...(currentOauth || {}),
-        client_id: clientId,
-        ...(clientSecret ? { client_secret: clientSecret } : {}),
-        token_url: manifest.auth.oauth2.token_url,
-        authorization_url: manifest.auth.oauth2.authorization_url,
-        access_token: tokenJson.access_token,
-        refresh_token: tokenJson.refresh_token,
-        token_type: tokenJson.token_type ?? 'Bearer',
-        scope: tokenJson.scope ?? scope,
-        expires_at: expiresAt,
-      },
-    });
+// ---- MCP setup: one command onboarding for Claude/Codex/Cursor/Windsurf ----
+mcpCommand
+  .command('setup [api]')
+  .description('Guided setup: install API, configure auth, configure client(s), and run a health check')
+  .option('--client <clients>', 'Target clients: all|claude|codex|cursor|windsurf or comma-separated list', 'all')
+  .option('--registry <url>', 'Registry URL (default: AGENTBRIDGE_REGISTRY or https://agentbridge.cc)')
+  .option('--token <token>', 'Token/key for bearer or api_key APIs')
+  .option('--client-id <id>', 'OAuth client ID override')
+  .option('--client-secret <secret>', 'OAuth client secret override (if provider requires it)')
+  .option('--scope <scope>', 'OAuth scopes override (space-separated)')
+  .option('-y, --yes', 'Non-interactive defaults where possible')
+  .action(async (apiArg: string | undefined, opts: any) => {
+    const registry = new APIRegistry();
+    const registryUrl = (opts?.registry || REGISTRY_URL).trim();
 
-    console.log(chalk.green(`  OAuth connected for "${name}".`));
-    console.log(chalk.gray(`  You can now run: agentbridge chat ${name}`));
+    console.log('');
+    console.log(chalk.bold.cyan('  AgentBridge MCP Setup'));
+    console.log(chalk.gray('  One flow: API install + auth + client config + health check'));
+    console.log('');
+
+    let requestedApi = (apiArg || '').trim();
+    if (!requestedApi) {
+      requestedApi = await askText('  API name (e.g. spotify, gmail, extractly-api): ');
+      if (!requestedApi || isExitSignal(requestedApi)) {
+        console.log(chalk.gray('  Setup cancelled.'));
+        return;
+      }
+    }
+
+    const clients = parseMcpClients(opts?.client || 'all');
+    if (clients.length === 0) {
+      console.error(chalk.red('  Invalid --client value. Use all|claude|codex|cursor|windsurf.'));
+      return;
+    }
+
+    const manifest = await ensureManifestInstalled(registry, requestedApi, registryUrl);
+    if (!manifest) return;
+
+    const apiName = manifest.name;
+    const initialCreds = readStoredApiCredentials(apiName);
+
+    if (!hasConfiguredAuth(manifest, initialCreds)) {
+      if (manifest.auth?.type === 'oauth2') {
+        console.log(chalk.yellow(`  ${apiName} requires OAuth authorization.`));
+        const doConnect = opts?.yes ? true : await promptYesNo('  Open OAuth flow now? (Y/n): ', true);
+        if (!doConnect) {
+          console.log(chalk.yellow('  Skipped OAuth. MCP tools may fail with 401 until connected.'));
+        } else {
+          try {
+            await connectOAuthApi(apiName, {
+              clientId: opts?.clientId,
+              clientSecret: opts?.clientSecret,
+              scope: opts?.scope,
+            });
+            console.log(chalk.green(`  OAuth connected for "${apiName}".`));
+          } catch (err: any) {
+            console.error(chalk.red(`  OAuth setup failed: ${err.message}`));
+            return;
+          }
+        }
+      } else if (manifest.auth && manifest.auth.type !== 'none') {
+        let token = (opts?.token || '').trim();
+        if (!token && !opts?.yes) {
+          token = await askText('  API token/key (or press Enter to skip): ');
+        }
+        if (isExitSignal(token)) {
+          console.log(chalk.gray('  Setup cancelled.'));
+          return;
+        }
+        if (token) {
+          registry.setCredentials(apiName, {
+            ...initialCreds,
+            token,
+            api_key: token,
+          });
+          console.log(chalk.green(`  Credentials saved for "${apiName}".`));
+        } else {
+          console.log(chalk.yellow('  No token provided. MCP tools may fail with 401 until token is set.'));
+          console.log(chalk.gray(`  Set later: agentbridge auth ${apiName} --token YOUR_TOKEN`));
+        }
+      }
+    }
+
+    const serverName = apiName;
+    const summary: Array<{ client: McpClient; ok: boolean; message: string }> = [];
+
+    for (const client of clients) {
+      if (client === 'claude') {
+        const result = await setupClaudeMcp(serverName, apiName, registryUrl);
+        summary.push({ client, ...result });
+      } else if (client === 'codex') {
+        const result = await setupCodexMcp(serverName, apiName, registryUrl);
+        summary.push({ client, ...result });
+      } else if (client === 'cursor' || client === 'windsurf') {
+        summary.push({
+          client,
+          ok: true,
+          message: `Manual step required in ${client} settings. Use the snippet shown below.`,
+        });
+      }
+    }
+
+    const smoke = await runMcpStartupCheck(apiName, registryUrl);
+
+    console.log('');
+    console.log(chalk.bold('  Setup Summary'));
+    for (const item of summary) {
+      const status = item.ok ? chalk.green('✓') : chalk.red('✖');
+      console.log(`  ${status} ${item.client}: ${item.message}`);
+    }
+    console.log(`  ${smoke.ok ? chalk.green('✓') : chalk.red('✖')} mcp-health: ${smoke.message}`);
+
+    console.log('');
+    console.log(chalk.white('  MCP config snippet (Cursor / Windsurf):'));
+    console.log(chalk.gray(buildMcpSnippet(apiName)));
+
+    if (registryUrl !== 'https://agentbridge.cc') {
+      console.log('');
+      console.log(chalk.yellow('  Custom registry detected.'));
+      console.log(chalk.gray(`  Ensure MCP server runs with AGENTBRIDGE_REGISTRY=${registryUrl}`));
+    }
+
+    console.log('');
+    console.log(chalk.white('  Try now:'));
+    console.log(chalk.gray(`    claude`));
+    console.log(chalk.gray(`    Ask: Use ${apiName} tools and run a quick read-only action.`));
+    console.log('');
   });
 
 // ---- List registered APIs ----
@@ -600,6 +688,283 @@ function getRegistryAuthHeaders(registryUrl: string): Record<string, string> {
   const token = envToken || (savedRegistry === registryUrl ? savedToken : undefined);
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
+}
+
+async function ensureManifestInstalled(registry: APIRegistry, apiName: string, registryUrl: string): Promise<AgentBridgeManifest | null> {
+  const local = registry.getManifest(apiName);
+  if (local) return local;
+
+  try {
+    const res = await fetch(`${registryUrl}/api/${encodeURIComponent(apiName)}/manifest`);
+    const raw = await res.text();
+    const data = parseMaybeJson(raw) as AgentBridgeManifest | null;
+    if (!res.ok || !data) {
+      const msg = (data as any)?.error || `API "${apiName}" not found on ${registryUrl}`;
+      console.error(chalk.red(`  ${msg}`));
+      if (!data && raw) {
+        const preview = raw.replace(/\s+/g, ' ').slice(0, 140);
+        console.error(chalk.gray(`  Server response preview: ${preview}${raw.length > 140 ? '…' : ''}`));
+      }
+      return null;
+    }
+    registry.addManifest(data, `${registryUrl}/api/${data.name}/manifest`);
+    console.log(chalk.green(`  Installed "${data.name}" (${data.actions.length} actions)`));
+    return data;
+  } catch (err: any) {
+    console.error(chalk.red(`  Failed to install "${apiName}": ${err.message}`));
+    return null;
+  }
+}
+
+function hasConfiguredAuth(manifest: AgentBridgeManifest, creds: Record<string, any>): boolean {
+  if (!manifest.auth || manifest.auth.type === 'none') return true;
+  if (manifest.auth.type === 'oauth2') {
+    const oauth = (creds.oauth && typeof creds.oauth === 'object') ? creds.oauth as Record<string, any> : {};
+    return Boolean(creds.token || creds.access_token || oauth.access_token);
+  }
+  return Boolean(creds.token || creds.api_key || creds.key);
+}
+
+async function connectOAuthApi(
+  name: string,
+  opts: { clientId?: string; clientSecret?: string; scope?: string } = {},
+): Promise<void> {
+  const registry = new APIRegistry();
+  const manifest = registry.getManifest(name);
+
+  if (!manifest) {
+    throw new Error(`API "${name}" is not installed locally. Run: agentbridge chat ${name}`);
+  }
+  if (manifest.auth?.type !== 'oauth2' || !manifest.auth.oauth2?.authorization_url || !manifest.auth.oauth2.token_url) {
+    throw new Error(`"${name}" does not define oauth2 authorization/token URLs in its manifest.`);
+  }
+
+  const current = readStoredApiCredentials(name);
+  const currentOauth = (current.oauth && typeof current.oauth === 'object') ? current.oauth : {};
+
+  const builtinDefaults = registry.getBuiltinDefaults(name);
+  const clientId = opts.clientId || current.oauth_client_id || currentOauth.client_id || builtinDefaults?.clientId || await askText('  OAuth client ID: ');
+  if (!clientId) {
+    throw new Error('OAuth client ID is required.');
+  }
+
+  const clientSecret = opts.clientSecret ?? current.oauth_client_secret ?? currentOauth.client_secret
+    ?? (builtinDefaults?.clientId ? '' : await askText('  OAuth client secret (optional): '));
+  const defaultScope = Object.keys(manifest.auth.oauth2.scopes ?? {}).join(' ');
+  const scope = opts.scope ?? defaultScope;
+
+  const { verifier, challenge } = createPkcePair();
+  const state = randomUUID();
+
+  const fixedPort = builtinDefaults?.callbackPort;
+  const callbackData = await waitForOAuthCode(state, manifest, clientId, challenge, scope, fixedPort);
+  if (!callbackData) {
+    throw new Error('OAuth flow did not complete.');
+  }
+
+  const tokenBody = new URLSearchParams();
+  tokenBody.set('grant_type', 'authorization_code');
+  tokenBody.set('code', callbackData.code);
+  tokenBody.set('redirect_uri', callbackData.redirectUri);
+  tokenBody.set('client_id', clientId);
+  tokenBody.set('code_verifier', verifier);
+  if (clientSecret) tokenBody.set('client_secret', clientSecret);
+
+  const tokenRes = await fetch(manifest.auth.oauth2.token_url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: tokenBody.toString(),
+  });
+
+  const tokenText = await tokenRes.text();
+  let tokenJson: any = null;
+  try {
+    tokenJson = tokenText ? JSON.parse(tokenText) : null;
+  } catch {
+    tokenJson = null;
+  }
+
+  if (!tokenRes.ok || !tokenJson?.access_token) {
+    const errorText = tokenJson?.error ? `: ${tokenJson.error}` : '';
+    throw new Error(`Token exchange failed (${tokenRes.status})${errorText}`);
+  }
+
+  const expiresAt = tokenJson.expires_in
+    ? new Date(Date.now() + Number(tokenJson.expires_in) * 1000).toISOString()
+    : undefined;
+
+  registry.setCredentials(name, {
+    ...current,
+    token: tokenJson.access_token,
+    oauth_client_id: clientId,
+    ...(clientSecret ? { oauth_client_secret: clientSecret } : {}),
+    oauth: {
+      ...(currentOauth || {}),
+      client_id: clientId,
+      ...(clientSecret ? { client_secret: clientSecret } : {}),
+      token_url: manifest.auth.oauth2.token_url,
+      authorization_url: manifest.auth.oauth2.authorization_url,
+      access_token: tokenJson.access_token,
+      refresh_token: tokenJson.refresh_token,
+      token_type: tokenJson.token_type ?? 'Bearer',
+      scope: tokenJson.scope ?? scope,
+      expires_at: expiresAt,
+    },
+  });
+}
+
+async function runCommandCapture(
+  command: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  timeoutMs = 20000,
+): Promise<{ ok: boolean; code: number | null; stdout: string; stderr: string; error?: string }> {
+  return new Promise(resolve => {
+    let done = false;
+    let timer: NodeJS.Timeout | null = null;
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: env || process.env,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    const finish = (value: { ok: boolean; code: number | null; stdout: string; stderr: string; error?: string }) => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+
+    child.stdout.on('data', d => { stdout += d.toString(); });
+    child.stderr.on('data', d => { stderr += d.toString(); });
+    child.on('error', err => finish({ ok: false, code: null, stdout, stderr, error: err.message }));
+    child.on('close', code => finish({ ok: code === 0, code, stdout, stderr }));
+
+    timer = setTimeout(() => {
+      try {
+        child.kill('SIGTERM');
+      } catch {}
+      finish({ ok: false, code: null, stdout, stderr, error: `Command timed out after ${Math.round(timeoutMs / 1000)}s` });
+    }, timeoutMs);
+  });
+}
+
+function summarizeProcessOutput(stdout: string, stderr: string): string {
+  const merged = `${stderr}\n${stdout}`.replace(/\s+/g, ' ').trim();
+  return merged.slice(0, 180) || 'unknown error';
+}
+
+function findCodexBinary(): string {
+  if (process.env.AGENTBRIDGE_CODEX_BIN?.trim()) return process.env.AGENTBRIDGE_CODEX_BIN.trim();
+
+  const preferred = ['/opt/homebrew/bin/codex', '/usr/local/bin/codex'];
+  for (const candidate of preferred) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  const npmPrefix = process.env.npm_config_prefix || '';
+  if (npmPrefix) {
+    const candidate = join(npmPrefix, 'bin', 'codex');
+    if (existsSync(candidate)) return candidate;
+  }
+
+  return 'codex';
+}
+
+async function setupClaudeMcp(serverName: string, apiName: string, registryUrl: string): Promise<{ ok: boolean; message: string }> {
+  await runCommandCapture('claude', ['mcp', 'remove', serverName]);
+
+  const args = ['mcp', 'add'];
+  if (registryUrl !== 'https://agentbridge.cc') {
+    args.push('-e', `AGENTBRIDGE_REGISTRY=${registryUrl}`);
+  }
+  args.push(serverName, '--', 'npx', '-y', '@agentbridgeai/mcp', '--api', apiName);
+  const result = await runCommandCapture('claude', args);
+  if (!result.ok) {
+    if (result.error?.includes('ENOENT')) {
+      return { ok: false, message: 'Claude CLI not found. Install Claude Code first.' };
+    }
+    return { ok: false, message: summarizeProcessOutput(result.stdout, result.stderr) };
+  }
+  return { ok: true, message: `Configured "${serverName}"` };
+}
+
+async function setupCodexMcp(serverName: string, apiName: string, registryUrl: string): Promise<{ ok: boolean; message: string }> {
+  const codexBin = findCodexBinary();
+  await runCommandCapture(codexBin, ['mcp', 'remove', serverName]);
+
+  const args = ['mcp', 'add'];
+  if (registryUrl !== 'https://agentbridge.cc') {
+    args.push('--env', `AGENTBRIDGE_REGISTRY=${registryUrl}`);
+  }
+  args.push(serverName, '--', 'npx', '-y', '@agentbridgeai/mcp', '--api', apiName);
+  const result = await runCommandCapture(codexBin, args);
+  if (!result.ok) {
+    if (result.error?.includes('ENOENT')) {
+      return { ok: false, message: 'Codex CLI not found. Install Codex CLI first.' };
+    }
+    return { ok: false, message: summarizeProcessOutput(result.stdout, result.stderr) };
+  }
+  return { ok: true, message: `Configured "${serverName}"` };
+}
+
+async function runMcpStartupCheck(apiName: string, registryUrl: string): Promise<{ ok: boolean; message: string }> {
+  return new Promise(resolve => {
+    let settled = false;
+    let combined = '';
+    const child = spawn('npx', ['-y', '@agentbridgeai/mcp', '--api', apiName], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        ...(registryUrl ? { AGENTBRIDGE_REGISTRY: registryUrl } : {}),
+      },
+    });
+
+    const finish = (ok: boolean, message: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardTimeout);
+      clearTimeout(successTimer);
+      try {
+        child.kill('SIGTERM');
+      } catch {}
+      resolve({ ok, message });
+    };
+
+    const onData = (data: Buffer) => {
+      const text = data.toString();
+      combined += text;
+      if (combined.includes('AgentBridge MCP Server starting with')) {
+        const actionMatch = combined.match(new RegExp(`-\\s+${escapeRegExp(apiName)}\\s+\\((\\d+) actions\\)`));
+        const detail = actionMatch ? `Server started (${actionMatch[1]} actions)` : 'Server started';
+        finish(true, detail);
+      } else if (combined.toLowerCase().includes('failed to fetch')) {
+        finish(false, summarizeProcessOutput('', combined));
+      }
+    };
+
+    child.stdout.on('data', onData);
+    child.stderr.on('data', onData);
+    child.on('error', err => finish(false, err.message));
+    child.on('close', code => {
+      if (!settled) {
+        finish(false, summarizeProcessOutput('', combined || `Process exited (${code})`));
+      }
+    });
+
+    // If process stays alive a few seconds, startup is healthy even if stderr format changes.
+    const successTimer = setTimeout(() => {
+      finish(true, 'Server process started');
+    }, 5000);
+
+    const hardTimeout = setTimeout(() => {
+      finish(false, 'Timed out starting MCP server');
+    }, 30000);
+  });
 }
 
 function readStoredApiCredentials(name: string): Record<string, any> {

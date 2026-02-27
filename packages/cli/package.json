@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/cli",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "CLI to chat with any API using natural language — powered by AgentBridge",
   "type": "module",
   "main": "./dist/index.js",

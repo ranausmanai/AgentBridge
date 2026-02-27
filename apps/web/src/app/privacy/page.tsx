@@ -120,7 +120,15 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-2xl font-semibold text-[var(--text-primary)] mb-3">13. Contact</h2>
           <p>
-            For privacy inquiries, contact: <a className="text-[var(--accent)] hover:text-[var(--accent-hover)]" href="mailto:usmanashrafrana@gmail.com">usmanashrafrana@gmail.com</a>
+            For privacy inquiries, contact: <a className="text-[var(--accent)] hover:text-[var(--accent-hover)]" href="mailto:usmanashrafrana@gmail.com">usmanashrafrana@gmail.com</a> or join our support channel on{' '}
+            <a
+              className="text-[var(--accent)] hover:text-[var(--accent-hover)]"
+              href="https://discord.gg/UW67PSwF"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Discord
+            </a>.
           </p>
         </section>
       </div>

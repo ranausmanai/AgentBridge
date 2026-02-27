@@ -19,6 +19,7 @@
 
 <p align="center">
   <a href="https://agentbridge.cc">Website</a> ·
+  <a href="https://discord.gg/UW67PSwF">Discord</a> ·
   <a href="#-quick-start">Quick Start</a> ·
   <a href="#-for-api-owners">API Owners</a> ·
   <a href="#-for-agent-builders">Agent Builders</a> ·
@@ -118,7 +119,16 @@ agentbridge search weather
 
 ### MCP — Claude Desktop, Cursor, Windsurf
 
-Turn any OpenAPI spec into an MCP server:
+Recommended onboarding (installs API, handles auth, configures clients, health-checks MCP):
+
+```bash
+# Works for OAuth + token APIs
+agentbridge mcp setup spotify
+agentbridge mcp setup gmail
+agentbridge mcp setup extractly-api
+```
+
+Direct MCP server usage:
 
 ```bash
 npx @agentbridgeai/mcp --openapi ./openapi.json

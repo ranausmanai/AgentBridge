@@ -24,6 +24,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a href="/" className="hover:text-[var(--text-primary)] transition">Home</a>
                 <a href="/privacy" className="hover:text-[var(--text-primary)] transition">Privacy Policy</a>
                 <a href="/terms" className="hover:text-[var(--text-primary)] transition">Terms of Service</a>
+                <a
+                  href="https://discord.gg/UW67PSwF"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-[var(--text-primary)] transition"
+                >
+                  Support Discord
+                </a>
               </div>
             </div>
           </footer>

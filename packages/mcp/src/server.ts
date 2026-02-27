@@ -34,8 +34,20 @@ import { parse as parseYAML } from 'yaml';
 
 async function main() {
   const args = process.argv.slice(2);
-  const manifests: AgentBridgeManifest[] = [];
-  const credentials: Record<string, Record<string, string>> = {};
+  const manifests = new Map<string, AgentBridgeManifest>();
+  const credentials: Record<string, Record<string, any>> = {};
+  const localRegistry = new APIRegistry();
+
+  const addManifest = (manifest: AgentBridgeManifest) => {
+    manifests.set(manifest.name, manifest);
+    const localCreds = localRegistry.getCredentials(manifest.name);
+    if (localCreds && Object.keys(localCreds).length > 0) {
+      credentials[manifest.name] = {
+        ...localCreds,
+        ...(credentials[manifest.name] || {}),
+      };
+    }
+  };
 
   let i = 0;
   while (i < args.length) {
@@ -49,7 +61,7 @@ async function main() {
       }
       const content = readFileSync(filePath, 'utf-8');
       const manifest = JSON.parse(content) as AgentBridgeManifest;
-      manifests.push(manifest);
+      addManifest(manifest);
     } else if (arg === '--openapi' || arg === '-o') {
       const filePath = args[++i];
       if (!filePath || !existsSync(filePath)) {
@@ -58,7 +70,7 @@ async function main() {
       }
       const content = readFileSync(filePath, 'utf-8');
       const manifest = convertOpenAPIToManifest(content);
-      manifests.push(manifest);
+      addManifest(manifest);
     } else if (arg === '--url' || arg === '-u') {
       const url = args[++i];
       if (!url) {
@@ -69,7 +81,7 @@ async function main() {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const manifest = await res.json() as AgentBridgeManifest;
-        manifests.push(manifest);
+        addManifest(manifest);
       } catch (err: any) {
         console.error(`Failed to fetch manifest from ${url}: ${err.message}`);
         process.exit(1);
@@ -80,15 +92,20 @@ async function main() {
         console.error('Missing API name argument for --api');
         process.exit(1);
       }
-      const registryUrl = process.env.AGENTBRIDGE_REGISTRY || 'https://agentbridge.cc';
-      try {
-        const res = await fetch(`${registryUrl}/api/${apiName}/manifest`);
-        if (!res.ok) throw new Error(`API "${apiName}" not found (HTTP ${res.status})`);
-        const manifest = await res.json() as AgentBridgeManifest;
-        manifests.push(manifest);
-      } catch (err: any) {
-        console.error(`Failed to fetch "${apiName}" from registry: ${err.message}`);
-        process.exit(1);
+      const localManifest = localRegistry.getManifest(apiName);
+      if (localManifest) {
+        addManifest(localManifest);
+      } else {
+        const registryUrl = process.env.AGENTBRIDGE_REGISTRY || 'https://agentbridge.cc';
+        try {
+          const res = await fetch(`${registryUrl}/api/${apiName}/manifest`);
+          if (!res.ok) throw new Error(`API "${apiName}" not found (HTTP ${res.status})`);
+          const manifest = await res.json() as AgentBridgeManifest;
+          addManifest(manifest);
+        } catch (err: any) {
+          console.error(`Failed to fetch "${apiName}" from registry: ${err.message}`);
+          process.exit(1);
+        }
       }
     } else if (arg === '--token' || arg === '-t') {
       // --token api-name:token-value
@@ -128,27 +145,28 @@ Claude Desktop (~/.claude/claude_desktop_config.json):
   }
 
   // If no explicit manifests provided, load from local registry
-  if (manifests.length === 0) {
-    const registry = new APIRegistry();
-    const entries = registry.list();
+  if (manifests.size === 0) {
+    const entries = localRegistry.list();
     for (const entry of entries) {
-      const manifest = registry.getManifest(entry.name);
-      if (manifest) manifests.push(manifest);
+      const manifest = localRegistry.getManifest(entry.name);
+      if (manifest) addManifest(manifest);
     }
   }
 
-  if (manifests.length === 0) {
+  const manifestList = Array.from(manifests.values());
+
+  if (manifestList.length === 0) {
     console.error('No APIs loaded. Use --manifest, --openapi, or register APIs first.');
     console.error('Run: agentbridge-mcp --help');
     process.exit(1);
   }
 
-  console.error(`AgentBridge MCP Server starting with ${manifests.length} API(s):`);
-  for (const m of manifests) {
+  console.error(`AgentBridge MCP Server starting with ${manifestList.length} API(s):`);
+  for (const m of manifestList) {
     console.error(`  - ${m.name} (${m.actions.length} actions)`);
   }
 
-  const server = createMCPServer({ manifests, credentials });
+  const server = createMCPServer({ manifests: manifestList, credentials });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

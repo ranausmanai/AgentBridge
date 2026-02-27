@@ -127,7 +127,15 @@ export default function TermsPage() {
         <section>
           <h2 className="text-2xl font-semibold text-[var(--text-primary)] mb-3">15. Contact</h2>
           <p>
-            For terms questions, contact: <a className="text-[var(--accent)] hover:text-[var(--accent-hover)]" href="mailto:usmanashrafrana@gmail.com">usmanashrafrana@gmail.com</a>
+            For terms questions, contact: <a className="text-[var(--accent)] hover:text-[var(--accent-hover)]" href="mailto:usmanashrafrana@gmail.com">usmanashrafrana@gmail.com</a> or join our support channel on{' '}
+            <a
+              className="text-[var(--accent)] hover:text-[var(--accent-hover)]"
+              href="https://discord.gg/UW67PSwF"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Discord
+            </a>.
           </p>
         </section>
       </div>

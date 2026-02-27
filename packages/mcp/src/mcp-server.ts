@@ -18,7 +18,7 @@ export function createMCPServer(options: MCPServerOptions) {
 
   const server = new McpServer({
     name: 'agentbridge',
-    version: '0.1.0',
+    version: '0.1.3',
   });
 
   // Register all manifest actions as MCP tools
@@ -29,9 +29,19 @@ export function createMCPServer(options: MCPServerOptions) {
       // Build parameter shape for the tool
       const paramShape: Record<string, any> = {};
       for (const param of action.parameters) {
-        paramShape[param.name] = {
-          type: param.type === 'integer' ? 'number' : param.type === 'boolean' ? 'boolean' : 'string',
+        const schemaType = param.type === 'integer' ? 'number' : param.type;
+        const schema: Record<string, any> = {
+          type: schemaType === 'object' ? 'object' : schemaType === 'array' ? 'array' : schemaType === 'boolean' ? 'boolean' : schemaType === 'number' ? 'number' : 'string',
           description: param.description,
+        };
+        if (schema.type === 'array') {
+          schema.items = { type: 'string' };
+        }
+        if (schema.type === 'object') {
+          schema.additionalProperties = true;
+        }
+        paramShape[param.name] = {
+          ...schema,
         };
       }
 

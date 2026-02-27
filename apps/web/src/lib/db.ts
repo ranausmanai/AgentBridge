@@ -347,16 +347,25 @@ export function getApiCredential(ownerId: string, apiName: string): ApiCredentia
   } | undefined;
 
   if (!row) return null;
-  const credentials = decryptJson<Record<string, any>>({
-    ciphertext: row.ciphertext,
-    iv: row.iv,
-    tag: row.tag,
-  });
-  return {
-    apiName: row.api_name,
-    credentials,
-    updatedAt: row.updated_at,
-  };
+  try {
+    const credentials = decryptJson<Record<string, any>>({
+      ciphertext: row.ciphertext,
+      iv: row.iv,
+      tag: row.tag,
+    });
+    return {
+      apiName: row.api_name,
+      credentials,
+      updatedAt: row.updated_at,
+    };
+  } catch {
+    // Corrupted/stale encrypted row (usually key rotation mismatch).
+    // Drop the broken row so OAuth can reconnect cleanly.
+    getDb().prepare(
+      'DELETE FROM api_credentials WHERE owner_id = ? AND api_name = ?',
+    ).run(ownerId, apiName);
+    return null;
+  }
 }
 
 export function getApiCredentials(

@@ -51,11 +51,12 @@ export class PluginRegistry {
         // Remove the top-level $schema key that zodToJsonSchema adds
         const { $schema, ...parameterSchema } = jsonSchema as any;
         const compactSchema = this.compactJsonSchema(parameterSchema);
+        const normalizedSchema = this.ensureValidToolSchema(compactSchema);
 
         tools.push({
           name: `${plugin.name}__${action.name}`,
           description: `[${plugin.name}] ${action.description}`,
-          parameters: compactSchema,
+          parameters: normalizedSchema,
         });
       }
     }
@@ -136,6 +137,28 @@ export class PluginRegistry {
       if (['description', 'default', 'examples', 'title', '$id', '$comment'].includes(key)) continue;
       out[key] = this.compactJsonSchema(raw);
     }
+    return out;
+  }
+
+  /**
+   * OpenAI-compatible function schemas require `items` for array types.
+   * Add a permissive default when zod->jsonschema output omits it.
+   */
+  private ensureValidToolSchema(value: any): any {
+    if (Array.isArray(value)) return value.map(v => this.ensureValidToolSchema(v));
+    if (!value || typeof value !== 'object') return value;
+
+    const out: Record<string, any> = {};
+    for (const [key, raw] of Object.entries(value)) {
+      out[key] = this.ensureValidToolSchema(raw);
+    }
+
+    const hasArrayType = out.type === 'array'
+      || (Array.isArray(out.type) && out.type.includes('array'));
+    if (hasArrayType && out.items === undefined) {
+      out.items = {};
+    }
+
     return out;
   }
 

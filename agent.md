@@ -205,3 +205,25 @@ curl -s https://agentbridge.cc/api/apis
 - Fewer repeated tool attempts.
 - Faster response in playlist creation flow.
 - Better reliability after OAuth without asking user for `user_id`.
+
+
+## 9) OpenAI schema error: array missing `items`
+
+### Symptom
+- Web chat failed with:
+  - `400 Invalid schema for function 'spotify__add_tracks_to_playlist': ... array schema missing items`
+
+### Root cause
+- Generated tool JSON schema had:
+  - `"uris": { "type": "array" }`
+  - without an `items` field.
+- OpenAI function schema validator rejects arrays missing `items`.
+
+### Fix
+- `/Users/usman/Documents/Vibed/clitest/packages/core/src/plugin-registry.ts`
+  - Added `ensureValidToolSchema(...)` normalization.
+  - If schema type is `array` and `items` is missing, inject `items: {}`.
+
+### Verification
+- Local generated schema now shows:
+  - `"uris": { "type": "array", "items": {} }`

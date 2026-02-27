@@ -2,6 +2,7 @@ import * as readline from 'readline';
 import chalk from 'chalk';
 import ora from 'ora';
 import type { AgentBridgeEngine, ToolCall, ActionResult } from '@agentbridgeai/core';
+import { CLI_VERSION } from './version.js';
 
 export async function startRepl(engine: AgentBridgeEngine): Promise<void> {
   const sessionId = engine.createSession();
@@ -11,7 +12,7 @@ export async function startRepl(engine: AgentBridgeEngine): Promise<void> {
   if (!process.stdin.destroyed) process.stdin.resume();
 
   console.log('');
-  console.log(chalk.bold.cyan('  AgentBridge') + chalk.gray(' v0.1.0'));
+  console.log(chalk.bold.cyan('  AgentBridge') + chalk.gray(` v${CLI_VERSION}`));
   console.log(chalk.gray(`  Loaded plugins: ${plugins.map(p => p.name).join(', ') || 'none'}`));
   console.log(chalk.gray('  Type naturally, or use /help, /plugins, /quit'));
   console.log('');

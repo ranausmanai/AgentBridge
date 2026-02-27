@@ -7,6 +7,7 @@ import { ClaudeProvider, OpenAIProvider } from '@agentbridgeai/llm';
 import { APIRegistry, convertOpenAPIToManifest, discoverFromDomain } from '@agentbridgeai/openapi';
 import { startRepl } from './repl.js';
 import { runInit } from './commands.js';
+import { CLI_VERSION } from './version.js';
 import { readFileSync } from 'fs';
 import { createServer } from 'http';
 import { randomUUID } from 'crypto';
@@ -37,7 +38,7 @@ function isLikelyHtml(text: string): boolean {
 program
   .name('agentbridge')
   .description('Make any API agent-ready — interact with any service using natural language')
-  .version('0.1.0');
+  .version(CLI_VERSION);
 
 // ---- Main chat command (default) ----
 // Supports: `agentbridge chat` (all installed APIs)

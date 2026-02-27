@@ -18,7 +18,7 @@ export function createMCPServer(options: MCPServerOptions) {
 
   const server = new McpServer({
     name: 'agentbridge',
-    version: '0.1.3',
+    version: '0.1.4',
   });
 
   // Register all manifest actions as MCP tools

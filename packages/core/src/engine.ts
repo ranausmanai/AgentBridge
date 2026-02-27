@@ -24,6 +24,7 @@ export class AgentBridgeEngine {
   private conversations: ConversationManager;
   private llm: LLMProvider;
   private systemPrompt: string;
+  private maxToolsPerTurn: number;
 
   constructor(config: AgentBridgeConfig) {
     this.registry = new PluginRegistry();
@@ -31,6 +32,7 @@ export class AgentBridgeEngine {
     this.conversations = new ConversationManager();
     this.llm = config.llmProvider;
     this.systemPrompt = config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    this.maxToolsPerTurn = Math.max(1, config.maxToolsPerTurn ?? 8);
 
     if (config.plugins) {
       for (const plugin of config.plugins) {
@@ -91,11 +93,12 @@ ${pluginList || 'No plugins installed.'}`;
       content: userMessage,
     });
 
-    const tools = this.registry.toLLMTools();
     const maxIterations = 10; // prevent infinite tool-calling loops
 
     for (let i = 0; i < maxIterations; i++) {
       const messages = this.conversations.getMessages(sessionId);
+      const latestUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content ?? userMessage;
+      const tools = this.registry.selectLLMTools(latestUserMessage, this.maxToolsPerTurn);
       const response = await this.llm.chat(messages, tools);
 
       // If no tool calls, return the text response

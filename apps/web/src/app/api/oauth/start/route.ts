@@ -6,7 +6,7 @@ import {
   getApiCredential,
 } from '@/lib/db';
 import { createOAuthState, createPkcePair, getRequestOrigin } from '@/lib/oauth';
-import type { AgentBridgeManifest } from '@agentbridgeai/openapi';
+import { type AgentBridgeManifest, getBuiltinApi } from '@agentbridgeai/openapi';
 
 function getManifest(apiName: string): AgentBridgeManifest | null {
   const api = getApiByName(apiName);
@@ -45,7 +45,8 @@ export async function GET(request: Request) {
 
   const existing = getApiCredential(owner.ownerId, apiName)?.credentials ?? {};
   const oauth = (existing.oauth && typeof existing.oauth === 'object') ? existing.oauth : {};
-  const clientId = existing.oauth_client_id || oauth.client_id;
+  const builtin = getBuiltinApi(apiName);
+  const clientId = existing.oauth_client_id || oauth.client_id || builtin?.oauthClientId;
   if (!clientId) {
     return NextResponse.json({
       error: 'OAuth client is not configured. Save oauth_client_id via /api/credentials first.',

@@ -24,6 +24,8 @@ import { homedir } from 'os';
 const REGISTRY_URL = process.env.AGENTBRIDGE_REGISTRY || 'https://agentbridge.cc';
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
 const GROQ_DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+const GEMINI_DEFAULT_MODEL = 'gemini-2.0-flash';
 const CLI_AUTH_PATH = '/api/cli-auth/start';
 const config = new Conf<{ registryToken?: string; registryUrl?: string }>({ projectName: 'agentbridge' });
 const LOCAL_REGISTRY_FILE = join(homedir(), '.agentbridge', 'registry.json');
@@ -111,6 +113,7 @@ program
     const engine = new AgentBridgeEngine({
       llmProvider: llm,
       plugins: allPlugins,
+      maxToolsPerTurn: Math.max(1, Number(process.env.AGENTBRIDGE_MAX_TOOLS || '8')),
     });
 
     await startRepl(engine);
@@ -379,20 +382,22 @@ program
     const current = readStoredApiCredentials(name);
     const currentOauth = (current.oauth && typeof current.oauth === 'object') ? current.oauth : {};
 
-    const clientId = opts.clientId || current.oauth_client_id || currentOauth.client_id || await askText('  OAuth client ID: ');
+    const builtinDefaults = registry.getBuiltinDefaults(name);
+    const clientId = opts.clientId || current.oauth_client_id || currentOauth.client_id || builtinDefaults?.clientId || await askText('  OAuth client ID: ');
     if (!clientId) {
       console.error(chalk.red('  OAuth client ID is required.'));
       process.exit(1);
     }
 
-    const clientSecret = opts.clientSecret ?? current.oauth_client_secret ?? currentOauth.client_secret ?? await askText('  OAuth client secret (optional): ');
+    const clientSecret = opts.clientSecret ?? current.oauth_client_secret ?? currentOauth.client_secret ?? (builtinDefaults ? '' : await askText('  OAuth client secret (optional): '));
     const defaultScope = Object.keys(manifest.auth.oauth2.scopes ?? {}).join(' ');
     const scope = opts.scope ?? defaultScope;
 
     const { verifier, challenge } = createPkcePair();
     const state = randomUUID();
 
-    const callbackData = await waitForOAuthCode(state, manifest, clientId, challenge, scope);
+    const fixedPort = builtinDefaults?.callbackPort;
+    const callbackData = await waitForOAuthCode(state, manifest, clientId, challenge, scope, fixedPort);
     if (!callbackData) {
       console.error(chalk.red('  OAuth flow did not complete.'));
       process.exit(1);
@@ -629,6 +634,7 @@ async function waitForOAuthCode(
   clientId: string,
   codeChallenge: string,
   scope: string,
+  fixedPort?: number,
 ): Promise<{ code: string; redirectUri: string } | null> {
   return new Promise(resolve => {
     const server = createServer((req, res) => {
@@ -663,7 +669,14 @@ async function waitForOAuthCode(
       resolve({ code: code!, redirectUri });
     });
 
-    server.listen(0, '127.0.0.1', async () => {
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE' && fixedPort) {
+        console.error(chalk.red(`  Port ${fixedPort} is already in use. Close the other process and retry.`));
+      }
+      resolve(null);
+    });
+
+    server.listen(fixedPort ?? 0, '127.0.0.1', async () => {
       const address = server.address();
       if (!address || typeof address === 'string') {
         server.close();
@@ -843,9 +856,10 @@ async function createLLMProvider() {
   console.log(`      ${chalk.cyan('1.')} Anthropic (Claude)  — ${chalk.gray('https://console.anthropic.com/settings/keys')}`);
   console.log(`      ${chalk.cyan('2.')} OpenAI (GPT)        — ${chalk.gray('https://platform.openai.com/api-keys')}`);
   console.log(`      ${chalk.cyan('3.')} Groq (fast & free)  — ${chalk.gray('https://console.groq.com/keys')}`);
+  console.log(`      ${chalk.cyan('4.')} Gemini (free)       — ${chalk.gray('https://aistudio.google.com/apikey')}`);
   console.log('');
 
-  const choice = await ask(chalk.white('    Choose provider (1/2/3): '));
+  const choice = await ask(chalk.white('    Choose provider (1/2/3/4): '));
   console.log('');
 
   if (choice === '1') {
@@ -898,6 +912,24 @@ async function createLLMProvider() {
       apiKey: key.trim(),
       model: process.env.AGENTBRIDGE_MODEL || GROQ_DEFAULT_MODEL,
       baseURL: GROQ_BASE_URL,
+    });
+  } else if (choice === '4') {
+    const key = await ask(chalk.white('    Gemini API key: '));
+    closePrompt();
+    if (!key.trim()) {
+      console.log(chalk.red('    No key provided.'));
+      process.exit(1);
+    }
+    console.log('');
+    console.log(chalk.green('    ✔ Key set for this session'));
+    console.log(chalk.gray('    To persist, add to your shell profile:'));
+    console.log(chalk.gray(`    export OPENAI_API_KEY=${key.trim().slice(0, 10)}...`));
+    console.log(chalk.gray('    export OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/'));
+    console.log('');
+    return new OpenAIProvider({
+      apiKey: key.trim(),
+      model: process.env.AGENTBRIDGE_MODEL || GEMINI_DEFAULT_MODEL,
+      baseURL: GEMINI_BASE_URL,
     });
   } else {
     closePrompt();

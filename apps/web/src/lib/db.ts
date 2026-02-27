@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { createHash, randomBytes } from 'crypto';
 import { decryptJson, encryptJson, isCredentialVaultConfigured } from './crypto';
+import { getAllBuiltinApis } from '@agentbridgeai/openapi';
 
 const DB_PATH = process.env.DATABASE_PATH || join(process.cwd(), 'agentbridge.db');
 
@@ -121,6 +122,42 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_oauth_sessions_owner ON oauth_sessions(owner_id);
     CREATE INDEX IF NOT EXISTS idx_oauth_sessions_expiry ON oauth_sessions(expires_at);
   `);
+
+  seedBuiltinApis(db);
+}
+
+function seedBuiltinApis(db: Database.Database) {
+  const builtins = getAllBuiltinApis();
+  const insertApiStmt = db.prepare(`
+    INSERT OR IGNORE INTO apis (name, description, version, base_url, auth_type, auth_config, manifest, owner_id, is_public)
+    VALUES (?, ?, ?, ?, ?, ?, ?, '__builtin__', 1)
+  `);
+  const insertActionStmt = db.prepare(`
+    INSERT INTO api_actions (api_id, action_id, description, method, path)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  for (const [, builtin] of Object.entries(builtins)) {
+    const m = builtin.manifest;
+    const existing = db.prepare('SELECT id FROM apis WHERE name = ?').get(m.name) as { id: number } | undefined;
+    if (existing) continue;
+
+    const result = insertApiStmt.run(
+      m.name,
+      m.description,
+      m.version,
+      m.base_url,
+      m.auth?.type ?? 'none',
+      m.auth ? JSON.stringify(m.auth) : null,
+      JSON.stringify(m),
+    );
+    const apiId = result.lastInsertRowid as number;
+    if (apiId) {
+      for (const action of m.actions) {
+        insertActionStmt.run(apiId, action.id, action.description, action.method, action.path);
+      }
+    }
+  }
 }
 
 export interface ApiRow {

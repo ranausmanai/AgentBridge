@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Engine, plugin registry, and conversation manager for AgentBridge",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,11 +12,20 @@
     "directory": "packages/core"
   },
   "homepage": "https://agentbridge.cc",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["ai", "agents", "api", "llm", "openapi", "agentbridge"],
+  "keywords": [
+    "ai",
+    "agents",
+    "api",
+    "llm",
+    "openapi",
+    "agentbridge"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

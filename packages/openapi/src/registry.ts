@@ -1,6 +1,7 @@
 import type { Plugin } from '@agentbridgeai/core';
 import type { AgentBridgeManifest } from './types.js';
 import { manifestToPlugin } from './manifest-to-plugin.js';
+import { getBuiltinApi } from './builtins/index.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -120,9 +121,30 @@ export class APIRegistry {
 
   /**
    * Get a specific manifest.
+   * If no local entry exists, checks builtins and auto-installs.
    */
   getManifest(name: string): AgentBridgeManifest | undefined {
-    return this.data.entries[name]?.manifest;
+    const local = this.data.entries[name]?.manifest;
+    if (local) return local;
+
+    const builtin = getBuiltinApi(name);
+    if (builtin) {
+      this.addManifest(builtin.manifest, `builtin://${name}`);
+      return builtin.manifest;
+    }
+    return undefined;
+  }
+
+  /**
+   * Get built-in defaults for a known API (client ID, callback port).
+   */
+  getBuiltinDefaults(name: string): { clientId?: string; callbackPort?: number } | undefined {
+    const builtin = getBuiltinApi(name);
+    if (!builtin) return undefined;
+    return {
+      clientId: builtin.oauthClientId,
+      callbackPort: builtin.cliCallbackPort,
+    };
   }
 
   /**

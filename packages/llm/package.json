@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/llm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "LLM providers for AgentBridge — Claude, GPT, Groq, Ollama, any OpenAI-compatible",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,11 +12,21 @@
     "directory": "packages/llm"
   },
   "homepage": "https://agentbridge.cc",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["ai", "llm", "openai", "claude", "groq", "ollama", "agentbridge"],
+  "keywords": [
+    "ai",
+    "llm",
+    "openai",
+    "claude",
+    "groq",
+    "ollama",
+    "agentbridge"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

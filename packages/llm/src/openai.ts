@@ -35,14 +35,40 @@ export class OpenAIProvider implements LLMProvider {
       },
     }));
 
-    const response = await this.client.chat.completions.create({
-      model: this.model,
-      max_tokens: this.maxTokens,
-      messages: openaiMessages,
-      tools: openaiTools.length > 0 ? openaiTools : undefined,
-    });
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        max_tokens: this.maxTokens,
+        messages: openaiMessages,
+        tools: openaiTools.length > 0 ? openaiTools : undefined,
+      });
 
-    return this.parseResponse(response);
+      return this.parseResponse(response);
+    } catch (err: any) {
+      // Groq/some providers fail on tool calls with "failed_generation" —
+      // retry once without tools so the user still gets a text response.
+      if (err?.status === 400 && String(err?.message ?? '').includes('Failed to')) {
+        const fallback = await this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          messages: openaiMessages,
+        });
+        return this.parseResponse(fallback);
+      }
+      // Some providers reject oversized tool payloads (e.g., 413).
+      // Retry with a smaller subset before failing hard.
+      if (err?.status === 413 && openaiTools.length > 0) {
+        const reducedTools = openaiTools.slice(0, Math.max(1, Math.floor(openaiTools.length / 2)));
+        const fallback = await this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          messages: openaiMessages,
+          tools: reducedTools,
+        });
+        return this.parseResponse(fallback);
+      }
+      throw err;
+    }
   }
 
   private convertMessages(messages: Message[]): OpenAI.ChatCompletionMessageParam[] {

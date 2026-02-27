@@ -56,6 +56,7 @@ export async function GET() {
     base_url: api.base_url,
     auth_type: api.auth_type,
     action_count: getApiActions(api.id).length,
+    is_builtin: api.owner_id === '__builtin__',
     created_at: api.created_at,
   }));
   return NextResponse.json(result);

@@ -13,6 +13,7 @@ interface ApiInfo {
   description: string;
   action_count: number;
   auth_type: string;
+  is_builtin?: boolean;
 }
 
 interface CredentialStatus {
@@ -23,6 +24,7 @@ interface CredentialStatus {
 }
 
 const LLM_PROVIDERS = [
+  { id: 'gemini', label: 'Gemini (free)', placeholder: 'AIzaSy...', hint: 'Free at aistudio.google.com' },
   { id: 'groq', label: 'Groq (free)', placeholder: 'gsk_...', hint: 'Free at console.groq.com' },
   { id: 'openai', label: 'OpenAI', placeholder: 'sk-...', hint: 'platform.openai.com' },
   { id: 'claude', label: 'Claude', placeholder: 'sk-ant-...', hint: 'console.anthropic.com' },
@@ -147,9 +149,9 @@ export default function ChatPage() {
     await refreshCredentialStatus(selected.map(a => a.name));
   }
 
-  async function connectOAuth(apiName: string) {
+  async function connectOAuth(apiName: string, isBuiltin?: boolean) {
     const clientId = oauthClientIds[apiName]?.trim();
-    if (!clientId) {
+    if (!isBuiltin && !clientId) {
       setOauthError(`Enter client ID for ${apiName} first.`);
       return;
     }
@@ -157,20 +159,38 @@ export default function ChatPage() {
     setOauthNotice('');
     setOauthConnectingApi(apiName);
     try {
-      const secret = oauthClientSecrets[apiName]?.trim();
-      await fetch('/api/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiName,
-          credentials: {
-            oauth_client_id: clientId,
-            ...(secret ? { oauth_client_secret: secret } : {}),
-          },
-        }),
-      });
-      window.location.href = `/api/oauth/start?api=${encodeURIComponent(apiName)}`;
-    } finally {
+      if (!isBuiltin) {
+        const secret = oauthClientSecrets[apiName]?.trim();
+        await fetch('/api/credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiName,
+            credentials: {
+              oauth_client_id: clientId,
+              ...(secret ? { oauth_client_secret: secret } : {}),
+            },
+          }),
+        });
+      }
+      const oauthUrl = `/api/oauth/start?api=${encodeURIComponent(apiName)}`;
+      const popup = window.open(oauthUrl, '_blank', 'noopener');
+      if (!popup) {
+        window.location.href = oauthUrl;
+        return;
+      }
+      const poll = setInterval(async () => {
+        const res = await fetch(`/api/credentials?apis=${encodeURIComponent(apiName)}`);
+        const data = await res.json();
+        if (data.statuses?.[apiName]?.oauthConnected) {
+          clearInterval(poll);
+          setOauthConnectingApi('');
+          setOauthNotice(`OAuth connected for ${apiName}.`);
+          setCredentialStatus(prev => ({ ...prev, [apiName]: data.statuses[apiName] }));
+        }
+      }, 2000);
+      setTimeout(() => clearInterval(poll), 300000);
+    } catch {
       setOauthConnectingApi('');
     }
   }
@@ -371,29 +391,42 @@ export default function ChatPage() {
                     </div>
 
                     {api.auth_type === 'oauth2' ? (
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={oauthClientIds[api.name] || ''}
-                          onChange={e => setOauthClientIds(prev => ({ ...prev, [api.name]: e.target.value }))}
-                          placeholder="OAuth client ID"
-                          className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-                        />
-                        <input
-                          type="password"
-                          value={oauthClientSecrets[api.name] || ''}
-                          onChange={e => setOauthClientSecrets(prev => ({ ...prev, [api.name]: e.target.value }))}
-                          placeholder="OAuth client secret (optional)"
-                          className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-                        />
-                        <button
-                          onClick={() => connectOAuth(api.name)}
-                          disabled={oauthConnectingApi === api.name}
-                          className="text-xs bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-black font-medium px-3 py-1.5 rounded-lg transition"
-                        >
-                          {oauthConnectingApi === api.name ? 'Opening OAuth...' : `Connect ${api.name}`}
-                        </button>
-                      </div>
+                      api.is_builtin ? (
+                        <div>
+                          <button
+                            onClick={() => connectOAuth(api.name, true)}
+                            disabled={oauthConnectingApi === api.name}
+                            className="text-xs bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-black font-medium px-3 py-1.5 rounded-lg transition"
+                          >
+                            {oauthConnectingApi === api.name ? 'Opening OAuth...' : `Connect ${api.name}`}
+                          </button>
+                          <p className="text-xs text-[var(--text-muted)] mt-1">No setup needed — click to authorize with your {api.name} account.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={oauthClientIds[api.name] || ''}
+                            onChange={e => setOauthClientIds(prev => ({ ...prev, [api.name]: e.target.value }))}
+                            placeholder="OAuth client ID"
+                            className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                          />
+                          <input
+                            type="password"
+                            value={oauthClientSecrets[api.name] || ''}
+                            onChange={e => setOauthClientSecrets(prev => ({ ...prev, [api.name]: e.target.value }))}
+                            placeholder="OAuth client secret (optional)"
+                            className="w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg p-2 text-[var(--text-secondary)] text-sm placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+                          />
+                          <button
+                            onClick={() => connectOAuth(api.name)}
+                            disabled={oauthConnectingApi === api.name}
+                            className="text-xs bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-black font-medium px-3 py-1.5 rounded-lg transition"
+                          >
+                            {oauthConnectingApi === api.name ? 'Opening OAuth...' : `Connect ${api.name}`}
+                          </button>
+                        </div>
+                      )
                     ) : (
                       <input
                         type="password"

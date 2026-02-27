@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { consumeOAuthSession, getApiByName, getApiCredential, upsertApiCredential } from '@/lib/db';
-import type { AgentBridgeManifest } from '@agentbridgeai/openapi';
+import { type AgentBridgeManifest, getBuiltinApi } from '@agentbridgeai/openapi';
 import { getRequestOrigin } from '@/lib/oauth';
 
 function getManifest(apiName: string): AgentBridgeManifest | null {
@@ -43,8 +43,11 @@ export async function GET(request: Request) {
 
   const existing = getApiCredential(session.ownerId, session.apiName)?.credentials ?? {};
   const existingOauth = (existing.oauth && typeof existing.oauth === 'object') ? existing.oauth : {};
-  const clientId = existing.oauth_client_id || existingOauth.client_id;
-  const clientSecret = existing.oauth_client_secret || existingOauth.client_secret;
+  const builtin = getBuiltinApi(session.apiName);
+  const clientId = existing.oauth_client_id || existingOauth.client_id || builtin?.oauthClientId;
+  const clientSecret = existing.oauth_client_secret || existingOauth.client_secret
+    || (builtin?.oauthClientSecret ? builtin.oauthClientSecret : undefined)
+    || process.env.BUILTIN_SPOTIFY_CLIENT_SECRET;
   if (!clientId) {
     return redirectToChat(request, { oauth: 'error', reason: 'missing_client_id' });
   }

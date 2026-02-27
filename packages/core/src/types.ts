@@ -98,4 +98,6 @@ export interface AgentBridgeConfig {
   llmProvider: LLMProvider;
   plugins?: Plugin[];
   systemPrompt?: string;
+  /** Max number of tool definitions sent to the model per turn. */
+  maxToolsPerTurn?: number;
 }

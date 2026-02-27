@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI to chat with any API using natural language — powered by AgentBridge",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,11 +15,20 @@
     "directory": "packages/cli"
   },
   "homepage": "https://agentbridge.cc",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
-  "keywords": ["cli", "ai-agents", "api", "natural-language", "agentbridge", "chatbot"],
+  "keywords": [
+    "cli",
+    "ai-agents",
+    "api",
+    "natural-language",
+    "agentbridge",
+    "chatbot"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

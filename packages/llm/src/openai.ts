@@ -83,21 +83,41 @@ export class OpenAIProvider implements LLMProvider {
     messages: OpenAI.ChatCompletionMessageParam[];
     tools?: OpenAI.ChatCompletionTool[];
   }): Promise<OpenAI.ChatCompletion> {
-    try {
-      return await this.client.chat.completions.create({
-        ...payload,
-        max_tokens: this.maxTokens,
-      });
-    } catch (err: any) {
-      const msg = String(err?.message ?? '');
-      if (err?.status === 400 && msg.includes("Unsupported parameter: 'max_tokens'")) {
-        return await this.client.chat.completions.create({
-          ...payload,
-          max_completion_tokens: this.maxTokens,
-        });
+    const tokenParamOrder = this.preferMaxCompletionTokens()
+      ? (['max_completion_tokens', 'max_tokens', 'none'] as const)
+      : (['max_tokens', 'max_completion_tokens', 'none'] as const);
+
+    let lastUnsupportedError: any = null;
+
+    for (const tokenParam of tokenParamOrder) {
+      try {
+        const request: any = { ...payload };
+        if (tokenParam === 'max_tokens') request.max_tokens = this.maxTokens;
+        if (tokenParam === 'max_completion_tokens') request.max_completion_tokens = this.maxTokens;
+        return await this.client.chat.completions.create(request);
+      } catch (err: any) {
+        if (this.isUnsupportedTokenParamError(err, tokenParam)) {
+          lastUnsupportedError = err;
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
+
+    throw lastUnsupportedError ?? new Error('Provider request failed');
+  }
+
+  private preferMaxCompletionTokens(): boolean {
+    // OpenAI reasoning/newer models (gpt-5/o-series) expect max_completion_tokens.
+    if (!this.baseURL) return /^(gpt-5|o1|o3|o4)/i.test(this.model);
+    return false;
+  }
+
+  private isUnsupportedTokenParamError(err: any, tokenParam: 'max_tokens' | 'max_completion_tokens' | 'none'): boolean {
+    if (tokenParam === 'none') return false;
+    const msg = String(err?.message ?? '');
+    if (!msg.toLowerCase().includes('unsupported parameter')) return false;
+    return msg.includes(`'${tokenParam}'`) || msg.includes(`"${tokenParam}"`);
   }
 
   private convertMessages(messages: Message[]): OpenAI.ChatCompletionMessageParam[] {

@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/cli",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "description": "CLI to chat with any API using natural language — powered by AgentBridge",
   "type": "module",
   "main": "./dist/index.js",
@@ -36,9 +36,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentbridgeai/core": "workspace:^",
-    "@agentbridgeai/llm": "workspace:^",
-    "@agentbridgeai/openapi": "workspace:^",
+    "@agentbridgeai/core": "^0.1.4",
+    "@agentbridgeai/llm": "^0.1.6",
+    "@agentbridgeai/openapi": "^0.1.5",
     "chalk": "^5.3.0",
     "ora": "^8.1.0",
     "commander": "^12.1.0",

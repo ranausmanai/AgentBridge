@@ -139,13 +139,14 @@ export class OpenAIProvider implements LLMProvider {
         }));
         result.push({
           role: 'assistant',
-          content: msg.content || null,
+          // Some OpenAI-compatible providers reject null content when tool_calls are present.
+          content: typeof msg.content === 'string' ? msg.content : '',
           tool_calls: toolCalls,
         });
       } else if (msg.role === 'tool') {
         result.push({
           role: 'tool',
-          content: msg.content,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? ''),
           tool_call_id: msg.toolCallId!,
         });
       }

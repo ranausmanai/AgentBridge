@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/llm",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "LLM providers for AgentBridge — Claude, GPT, Groq, Ollama, any OpenAI-compatible",
   "type": "module",
   "main": "./dist/index.js",

@@ -38,9 +38,8 @@ export class OpenAIProvider implements LLMProvider {
     }));
 
     try {
-      const response = await this.client.chat.completions.create({
+      const response = await this.createCompletion({
         model: this.model,
-        max_tokens: this.maxTokens,
         messages: openaiMessages,
         tools: openaiTools.length > 0 ? openaiTools : undefined,
       });
@@ -55,9 +54,8 @@ export class OpenAIProvider implements LLMProvider {
       if (openaiTools.length > 0 && (status === 400 || status === 413)) {
         try {
           const reducedTools = openaiTools.slice(0, Math.max(1, Math.floor(openaiTools.length / 2)));
-          const reduced = await this.client.chat.completions.create({
+          const reduced = await this.createCompletion({
             model: this.model,
-            max_tokens: this.maxTokens,
             messages: openaiMessages,
             tools: reducedTools,
           });
@@ -67,9 +65,8 @@ export class OpenAIProvider implements LLMProvider {
         // Groq often returns malformed function-call errors on tool mode.
         if (status === 413 || status === 400 || msg.includes('Failed to') || msg.includes('no body')) {
           try {
-            const fallback = await this.client.chat.completions.create({
+            const fallback = await this.createCompletion({
               model: this.model,
-              max_tokens: this.maxTokens,
               messages: openaiMessages,
             });
             return this.parseResponse(fallback);
@@ -78,6 +75,28 @@ export class OpenAIProvider implements LLMProvider {
       }
 
       throw this.enrichProviderError(err);
+    }
+  }
+
+  private async createCompletion(payload: {
+    model: string;
+    messages: OpenAI.ChatCompletionMessageParam[];
+    tools?: OpenAI.ChatCompletionTool[];
+  }): Promise<OpenAI.ChatCompletion> {
+    try {
+      return await this.client.chat.completions.create({
+        ...payload,
+        max_tokens: this.maxTokens,
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? '');
+      if (err?.status === 400 && msg.includes("Unsupported parameter: 'max_tokens'")) {
+        return await this.client.chat.completions.create({
+          ...payload,
+          max_completion_tokens: this.maxTokens,
+        });
+      }
+      throw err;
     }
   }
 

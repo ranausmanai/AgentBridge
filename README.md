@@ -20,6 +20,7 @@
 <p align="center">
   <a href="https://agentbridge.cc">Website</a> ·
   <a href="https://discord.gg/UW67PSwF">Discord</a> ·
+  <a href="#-install">Install</a> ·
   <a href="#-quick-start">Quick Start</a> ·
   <a href="#-for-api-owners">API Owners</a> ·
   <a href="#-for-agent-builders">Agent Builders</a> ·
@@ -33,14 +34,34 @@
 
 Most APIs are built for humans writing code. But AI agents need to **discover, understand, and call APIs autonomously**. AgentBridge makes any API agent-ready — paste your OpenAPI spec, get an instant bridge to every AI agent in the world.
 
+```mermaid
+flowchart LR
+  OA["OpenAPI Spec"] --> MF[".agentbridge.json"]
+  MF --> RT["AgentBridge Auto-call Runtime"]
+  RT <--> API["REST API"]
+  RT --> C["Claude"]
+  RT --> G["GPT"]
+  RT --> GR["Groq"]
+  RT --> O["Ollama"]
 ```
-  Your API          AgentBridge           AI Agents
- ┌─────────┐      ┌─────────────┐      ┌──────────┐
- │ OpenAPI  │ ───▶ │  .agentbridge│ ───▶ │ Claude   │
- │  Spec    │      │    .json     │      │ GPT      │
- │          │      │              │      │ Groq     │
- │ REST API │ ◀─── │  Auto-call   │ ◀─── │ Ollama   │
- └─────────┘      └─────────────┘      └──────────┘
+
+## 📥 Install
+
+Requirements: Node.js 20+
+
+```bash
+# Run directly (no install)
+npx agentbridge --version
+
+# Optional: install globally
+npm i -g @agentbridgeai/cli
+agentbridge --version
+```
+
+If you want the standalone MCP server package:
+
+```bash
+npx @agentbridgeai/mcp --help
 ```
 
 ## ✨ Quick Start
@@ -221,32 +242,27 @@ The `.agentbridge.json` manifest is the open standard at the heart of AgentBridg
 
 ## 🌐 The Ecosystem
 
-```
- ┌──────────────────────────────────────────────────────────┐
- │                      API Owners                          │
- │            Spotify · Stripe · Your Startup               │
- │                                                          │
- │  1. npx agentbridge init                                 │
- │  2. npx agentbridge publish                              │
- │  3. (optional) Host .well-known/agentbridge.json         │
- └──────────────────────┬───────────────────────────────────┘
-                        │
-              ┌─────────▼──────────┐
-              │    AgentBridge     │
-              │     Directory      │
-              │  agentbridge.cc    │
-              │                    │
-              │  Indexes APIs      │
-              │  Open standard     │
-              │  No vendor lock-in │
-              └─────────┬──────────┘
-                        │
-         ┌──────────────┼──────────────┐
-         ▼              ▼              ▼
-       CLI           MCP Server     SDK / Web
-   npx agentbridge   Claude Desktop  Your app
-      chat           Cursor / VS     agents
-                     Code / Windsurf
+```mermaid
+flowchart TB
+  subgraph OWNERS["API Owners"]
+    O1["Spotify · Stripe · Your Startup"]
+    O2["1. npx agentbridge init"]
+    O3["2. npx agentbridge publish"]
+    O4["3. Optional: host /.well-known/agentbridge.json"]
+  end
+
+  DIR["AgentBridge Directory<br/>agentbridge.cc<br/><br/>Indexes APIs<br/>Open standard<br/>No vendor lock-in"]
+
+  subgraph USERS["Consumers"]
+    U1["CLI<br/>npx agentbridge chat"]
+    U2["MCP Server<br/>Claude / Cursor / VS Code / Windsurf"]
+    U3["SDK / Web<br/>Your app agents"]
+  end
+
+  OWNERS --> DIR
+  DIR --> U1
+  DIR --> U2
+  DIR --> U3
 ```
 
 ## 🔍 Discovery API

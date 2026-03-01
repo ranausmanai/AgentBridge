@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/llm",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "LLM providers for AgentBridge — Claude, GPT, Groq, Ollama, any OpenAI-compatible",
   "type": "module",
   "main": "./dist/index.js",
@@ -33,7 +33,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentbridgeai/core": "workspace:^",
+    "@agentbridgeai/core": "^0.1.5",
     "@anthropic-ai/sdk": "^0.39.0",
     "openai": "^4.73.0"
   },

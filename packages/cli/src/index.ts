@@ -13,7 +13,7 @@ import {
 import { startRepl } from './repl.js';
 import { runInit } from './commands.js';
 import { CLI_VERSION } from './version.js';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
 import { createServer } from 'http';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { spawn } from 'child_process';
@@ -99,7 +99,7 @@ program
 
     // If user specified an API name, try to find and install it
     if (apiName) {
-      const existing = registry.getManifest(apiName);
+      let existing = registry.getManifest(apiName);
       if (!existing) {
         // Search the directory and auto-install
         console.log(chalk.gray(`  Searching for "${apiName}"...`));
@@ -118,12 +118,28 @@ program
                 registry.setCredentials(manifest.name, { token: opts.token, api_key: opts.token });
                 console.log(chalk.green(`  Auth configured for "${manifest.name}"`));
               } else if (manifest.auth) {
-                console.log(chalk.yellow(`  This API requires auth (${manifest.auth.type}).`));
-                if (manifest.auth.type === 'oauth2') {
-                  console.log(chalk.gray(`  Run: agentbridge connect ${manifest.name}`));
-                } else {
-                  console.log(chalk.gray(`  Run: agentbridge auth ${manifest.name} --token YOUR_TOKEN`));
-                  console.log(chalk.gray(`  Or: agentbridge chat ${manifest.name} --token YOUR_TOKEN`));
+                const existingCreds = readStoredApiCredentials(manifest.name);
+                if (!hasConfiguredAuth(manifest, existingCreds)) {
+                  if (manifest.auth.type === 'oauth2') {
+                    console.log(chalk.yellow(`  This API requires OAuth. Starting connect flow...`));
+                    try {
+                      await connectOAuthApi(manifest.name);
+                      registry.reload(); // pick up credentials stored by connectOAuthApi
+                      console.log(chalk.green(`  OAuth connected for "${manifest.name}".`));
+                    } catch (err: any) {
+                      console.error(chalk.red(`  OAuth connect failed: ${err.message}`));
+                      console.log(chalk.gray(`  You can retry later: agentbridge connect ${manifest.name}`));
+                    }
+                  } else {
+                    const token = await askText(`  ${manifest.name} API token (or Enter to skip): `);
+                    if (token.trim()) {
+                      registry.setCredentials(manifest.name, { token: token.trim(), api_key: token.trim() });
+                      console.log(chalk.green(`  Auth configured for "${manifest.name}"`));
+                    } else {
+                      console.log(chalk.yellow(`  Skipped auth. Some actions may fail.`));
+                      console.log(chalk.gray(`  Set later: agentbridge auth ${manifest.name} --token YOUR_TOKEN`));
+                    }
+                  }
                 }
               }
             } else {
@@ -132,6 +148,31 @@ program
           }
         } catch {
           console.log(chalk.gray(`  Could not reach directory — chatting with installed APIs only.`));
+        }
+      }
+
+      // Check auth for the target API (whether freshly installed or already existing)
+      existing = existing || registry.getManifest(apiName);
+      if (existing?.auth && !opts?.token) {
+        const creds = readStoredApiCredentials(existing.name);
+        if (!hasConfiguredAuth(existing, creds)) {
+          if (existing.auth.type === 'oauth2') {
+            console.log(chalk.yellow(`  "${existing.name}" requires OAuth. Starting connect flow...`));
+            try {
+              await connectOAuthApi(existing.name);
+              registry.reload(); // pick up credentials stored by connectOAuthApi
+              console.log(chalk.green(`  OAuth connected for "${existing.name}".`));
+            } catch (err: any) {
+              console.error(chalk.red(`  OAuth connect failed: ${err.message}`));
+              console.log(chalk.gray(`  You can retry later: agentbridge connect ${existing.name}`));
+            }
+          } else {
+            const token = await askText(`  ${existing.name} API token (or Enter to skip): `);
+            if (token.trim()) {
+              registry.setCredentials(existing.name, { token: token.trim(), api_key: token.trim() });
+              console.log(chalk.green(`  Auth configured for "${existing.name}"`));
+            }
+          }
         }
       }
     }
@@ -669,6 +710,46 @@ program
     await runInit({ yes: opts?.yes, spec: opts?.spec });
   });
 
+// ---- LLM config management ----
+const llmCmd = program
+  .command('llm')
+  .description('Manage saved LLM provider configuration');
+
+llmCmd
+  .command('reset')
+  .description('Remove saved LLM key and provider')
+  .action(() => {
+    if (existsSync(LLM_CONFIG_FILE)) {
+      unlinkSync(LLM_CONFIG_FILE);
+      console.log(chalk.green('  ✔ Saved LLM config removed.'));
+      console.log(chalk.gray(`  Deleted: ${LLM_CONFIG_FILE}`));
+      console.log(chalk.gray('  You will be prompted for a key on next chat.'));
+    } else {
+      console.log(chalk.gray('  No saved LLM config found.'));
+    }
+  });
+
+llmCmd
+  .command('status')
+  .description('Show current LLM provider config')
+  .action(() => {
+    const saved = loadSavedLlmConfig();
+    if (saved) {
+      const masked = saved.apiKey.slice(0, 10) + '...' + saved.apiKey.slice(-4);
+      console.log(chalk.white(`  Provider: ${chalk.cyan(saved.provider)}`));
+      console.log(chalk.white(`  Key:      ${chalk.gray(masked)}`));
+      if (saved.baseURL) console.log(chalk.white(`  Base URL: ${chalk.gray(saved.baseURL)}`));
+      if (saved.model) console.log(chalk.white(`  Model:    ${chalk.gray(saved.model)}`));
+      console.log(chalk.gray(`  Stored at: ${LLM_CONFIG_FILE}`));
+    } else if (process.env.ANTHROPIC_API_KEY) {
+      console.log(chalk.white(`  Provider: ${chalk.cyan('Anthropic')} (from env ANTHROPIC_API_KEY)`));
+    } else if (process.env.OPENAI_API_KEY) {
+      console.log(chalk.white(`  Provider: ${chalk.cyan('OpenAI')} (from env OPENAI_API_KEY)`));
+    } else {
+      console.log(chalk.gray('  No LLM key configured. You will be prompted on next chat.'));
+    }
+  });
+
 // ---- Login: authenticate CLI with hosted registry ----
 program
   .command('login')
@@ -1182,7 +1263,48 @@ async function waitForCliLoginCallback(state: string, registryUrl: string): Prom
   });
 }
 
+const LLM_CONFIG_FILE = join(homedir(), '.agentbridge', 'llm.json');
+
+interface LlmConfig {
+  provider: string;
+  apiKey: string;
+  baseURL?: string;
+  model?: string;
+}
+
+function loadSavedLlmConfig(): LlmConfig | null {
+  try {
+    if (!existsSync(LLM_CONFIG_FILE)) return null;
+    const data = JSON.parse(readFileSync(LLM_CONFIG_FILE, 'utf-8')) as LlmConfig;
+    if (data.provider && data.apiKey) return data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLlmConfig(config: LlmConfig): void {
+  const dir = join(homedir(), '.agentbridge');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(LLM_CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+function providerFromConfig(config: LlmConfig): ClaudeProvider | OpenAIProvider {
+  if (config.provider === 'anthropic') {
+    return new ClaudeProvider({
+      apiKey: config.apiKey,
+      model: process.env.AGENTBRIDGE_MODEL || config.model || undefined,
+    });
+  }
+  return new OpenAIProvider({
+    apiKey: config.apiKey,
+    model: process.env.AGENTBRIDGE_MODEL || config.model || undefined,
+    baseURL: config.baseURL || undefined,
+  });
+}
+
 async function createLLMProvider() {
+  // 1. Environment variables take priority
   if (process.env.ANTHROPIC_API_KEY) {
     return new ClaudeProvider({
       apiKey: process.env.ANTHROPIC_API_KEY,
@@ -1199,7 +1321,20 @@ async function createLLMProvider() {
     });
   }
 
-  // Interactive key setup
+  // 2. Check for saved config
+  const saved = loadSavedLlmConfig();
+  if (saved) {
+    const providerLabel = saved.provider === 'anthropic' ? 'Anthropic'
+      : saved.provider === 'groq' ? 'Groq'
+      : saved.provider === 'gemini' ? 'Gemini'
+      : 'OpenAI';
+    console.log(chalk.green(`    ✔ Using saved ${providerLabel} key from ${LLM_CONFIG_FILE}`));
+    console.log(chalk.gray(`    To change provider: agentbridge llm reset`));
+    console.log('');
+    return providerFromConfig(saved);
+  }
+
+  // 3. Interactive key setup
   const readline = await import('readline');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q: string): Promise<string> => new Promise(resolve => rl.question(q, resolve));
@@ -1227,80 +1362,48 @@ async function createLLMProvider() {
   const choice = await ask(chalk.white('    Choose provider (1/2/3/4): '));
   console.log('');
 
+  let llmConfig: LlmConfig;
+
   if (choice === '1') {
     const key = await ask(chalk.white('    Anthropic API key: '));
-    closePrompt();
-    if (!key.trim()) {
-      console.log(chalk.red('    No key provided.'));
-      process.exit(1);
-    }
-    process.env.ANTHROPIC_API_KEY = key.trim();
-    console.log('');
-    console.log(chalk.green('    ✔ Key set for this session'));
-    console.log(chalk.gray('    To persist, add to your shell profile:'));
-    console.log(chalk.gray(`    export ANTHROPIC_API_KEY=${key.trim().slice(0, 10)}...`));
-    console.log('');
-    return new ClaudeProvider({
-      apiKey: key.trim(),
-      model: process.env.AGENTBRIDGE_MODEL || undefined,
-    });
+    if (!key.trim()) { closePrompt(); console.log(chalk.red('    No key provided.')); process.exit(1); }
+    llmConfig = { provider: 'anthropic', apiKey: key.trim() };
   } else if (choice === '2') {
     const key = await ask(chalk.white('    OpenAI API key: '));
-    closePrompt();
-    if (!key.trim()) {
-      console.log(chalk.red('    No key provided.'));
-      process.exit(1);
-    }
-    console.log('');
-    console.log(chalk.green('    ✔ Key set for this session'));
-    console.log(chalk.gray('    To persist, add to your shell profile:'));
-    console.log(chalk.gray(`    export OPENAI_API_KEY=${key.trim().slice(0, 10)}...`));
-    console.log('');
-    return new OpenAIProvider({
-      apiKey: key.trim(),
-      model: process.env.AGENTBRIDGE_MODEL || undefined,
-    });
+    if (!key.trim()) { closePrompt(); console.log(chalk.red('    No key provided.')); process.exit(1); }
+    llmConfig = { provider: 'openai', apiKey: key.trim() };
   } else if (choice === '3') {
     const key = await ask(chalk.white('    Groq API key: '));
-    closePrompt();
-    if (!key.trim()) {
-      console.log(chalk.red('    No key provided.'));
-      process.exit(1);
-    }
-    console.log('');
-    console.log(chalk.green('    ✔ Key set for this session'));
-    console.log(chalk.gray('    To persist, add to your shell profile:'));
-    console.log(chalk.gray(`    export OPENAI_API_KEY=${key.trim().slice(0, 10)}...`));
-    console.log(chalk.gray('    export OPENAI_BASE_URL=https://api.groq.com/openai/v1'));
-    console.log('');
-    return new OpenAIProvider({
-      apiKey: key.trim(),
-      model: process.env.AGENTBRIDGE_MODEL || GROQ_DEFAULT_MODEL,
-      baseURL: GROQ_BASE_URL,
-    });
+    if (!key.trim()) { closePrompt(); console.log(chalk.red('    No key provided.')); process.exit(1); }
+    llmConfig = { provider: 'groq', apiKey: key.trim(), baseURL: GROQ_BASE_URL, model: GROQ_DEFAULT_MODEL };
   } else if (choice === '4') {
     const key = await ask(chalk.white('    Gemini API key: '));
-    closePrompt();
-    if (!key.trim()) {
-      console.log(chalk.red('    No key provided.'));
-      process.exit(1);
-    }
-    console.log('');
-    console.log(chalk.green('    ✔ Key set for this session'));
-    console.log(chalk.gray('    To persist, add to your shell profile:'));
-    console.log(chalk.gray(`    export OPENAI_API_KEY=${key.trim().slice(0, 10)}...`));
-    console.log(chalk.gray('    export OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/'));
-    console.log('');
-    return new OpenAIProvider({
-      apiKey: key.trim(),
-      model: process.env.AGENTBRIDGE_MODEL || GEMINI_DEFAULT_MODEL,
-      baseURL: GEMINI_BASE_URL,
-    });
+    if (!key.trim()) { closePrompt(); console.log(chalk.red('    No key provided.')); process.exit(1); }
+    llmConfig = { provider: 'gemini', apiKey: key.trim(), baseURL: GEMINI_BASE_URL, model: GEMINI_DEFAULT_MODEL };
   } else {
     closePrompt();
     console.log(chalk.red('    Invalid choice.'));
     process.exit(1);
   }
+
+  // Ask to save
+  const save = await ask(chalk.white('    Save this key locally for future sessions? (Y/n): '));
+  closePrompt();
+
+  if (!save.trim() || save.trim().toLowerCase() === 'y' || save.trim().toLowerCase() === 'yes') {
+    saveLlmConfig(llmConfig);
+    console.log('');
+    console.log(chalk.green('    ✔ Key saved locally'));
+    console.log(chalk.gray(`    Stored at: ${LLM_CONFIG_FILE}`));
+    console.log(chalk.gray('    Your key never leaves this machine.'));
+    console.log(chalk.gray('    To change or remove: agentbridge llm reset'));
+  } else {
+    console.log('');
+    console.log(chalk.green('    ✔ Key set for this session only'));
+  }
+  console.log('');
+
+  return providerFromConfig(llmConfig);
 }
 
 program.parse();

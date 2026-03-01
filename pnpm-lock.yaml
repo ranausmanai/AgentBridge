@@ -66,14 +66,14 @@ importers:
   packages/cli:
     dependencies:
       '@agentbridgeai/core':
-        specifier: ^0.1.4
-        version: 0.1.4
+        specifier: ^0.1.5
+        version: 0.1.5
       '@agentbridgeai/llm':
         specifier: ^0.1.6
         version: 0.1.6(ws@8.19.0)(zod@3.25.76)
       '@agentbridgeai/openapi':
-        specifier: ^0.1.6
-        version: 0.1.6
+        specifier: ^0.1.7
+        version: 0.1.7
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -116,8 +116,8 @@ importers:
   packages/llm:
     dependencies:
       '@agentbridgeai/core':
-        specifier: workspace:^
-        version: link:../core
+        specifier: ^0.1.5
+        version: 0.1.5
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
@@ -160,8 +160,8 @@ importers:
   packages/openapi:
     dependencies:
       '@agentbridgeai/core':
-        specifier: workspace:^
-        version: link:../core
+        specifier: ^0.1.5
+        version: 0.1.5
       yaml:
         specifier: ^2.6.0
         version: 2.8.2
@@ -179,8 +179,8 @@ importers:
   packages/sdk:
     dependencies:
       '@agentbridgeai/core':
-        specifier: workspace:^
-        version: link:../core
+        specifier: ^0.1.5
+        version: 0.1.5
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -235,11 +235,17 @@ packages:
   '@agentbridgeai/core@0.1.4':
     resolution: {integrity: sha512-pMf63DFPnb+Z8s3jY80rUIF+dXcBWMg7PYANL9nglCEANApOtzVznRmjs3vNzlgwh0U+89J2qefHXBX8aJmaFg==}
 
+  '@agentbridgeai/core@0.1.5':
+    resolution: {integrity: sha512-vMcfZDkt8aEDSWRzaJU/EiiDAAsUr8LsrxsKj5fyrpPaHOl85ElvPtEQrjMLheVjbCtL1P2Qqtf1NyBl1yJohg==}
+
   '@agentbridgeai/llm@0.1.6':
     resolution: {integrity: sha512-DdQdgBNhPtXnygmHE2+oO8ycv+MhgYhmpxmoIVg+QymZfs/szuGuOz42pEYlOSosOhOAvo1RNnznsTQjYUNfkg==}
 
   '@agentbridgeai/openapi@0.1.6':
     resolution: {integrity: sha512-+ZTJMX5KKVNXdQfNdn53dk67l8bqT1N+7GBeHmXoN9rKEMOGP2MXftZqagrC6EBuYAoj3iLpQmsF5X7Rx1T2bg==}
+
+  '@agentbridgeai/openapi@0.1.7':
+    resolution: {integrity: sha512-+HgpaHeZPIIteT70Okhea6Qophpx0bY4o/AJOxUiYvLYl4grqUjsx+q/tAQXjN7TAdmp+lbY3HRmUra3INnayA==}
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -1507,9 +1513,15 @@ snapshots:
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
 
+  '@agentbridgeai/core@0.1.5':
+    dependencies:
+      conf: 13.1.0
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.1(zod@3.25.76)
+
   '@agentbridgeai/llm@0.1.6(ws@8.19.0)(zod@3.25.76)':
     dependencies:
-      '@agentbridgeai/core': 0.1.4
+      '@agentbridgeai/core': 0.1.5
       '@anthropic-ai/sdk': 0.39.0
       openai: 4.104.0(ws@8.19.0)(zod@3.25.76)
     transitivePeerDependencies:
@@ -1520,6 +1532,12 @@ snapshots:
   '@agentbridgeai/openapi@0.1.6':
     dependencies:
       '@agentbridgeai/core': 0.1.4
+      yaml: 2.8.2
+      zod: 3.25.76
+
+  '@agentbridgeai/openapi@0.1.7':
+    dependencies:
+      '@agentbridgeai/core': link:packages/core
       yaml: 2.8.2
       zod: 3.25.76
 

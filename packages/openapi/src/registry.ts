@@ -56,6 +56,13 @@ export class APIRegistry {
   }
 
   /**
+   * Reload registry data from disk (picks up credentials stored by other instances).
+   */
+  reload(): void {
+    this.data = this.load();
+  }
+
+  /**
    * Add an API to the registry by its manifest URL.
    * Fetches the manifest and caches it locally.
    */

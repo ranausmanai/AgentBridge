@@ -23,7 +23,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentbridgeai/core": "workspace:^",
+    "@agentbridgeai/core": "^0.1.5",
     "zod": "^3.23.0"
   },
   "devDependencies": {

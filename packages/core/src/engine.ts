@@ -128,6 +128,7 @@ ${pluginList || 'No plugins installed.'}`;
       );
 
       // Add tool results as messages
+      let hasAuthError = false;
       for (const tr of toolResults) {
         const tc = response.toolCalls.find(t => t.id === tr.toolCallId);
         if (options?.onToolCall && tc) options.onToolCall(tc);
@@ -135,11 +136,27 @@ ${pluginList || 'No plugins installed.'}`;
           options.onToolResult(`${tc.pluginName}.${tc.actionName}`, tr.result);
         }
 
+        // Detect auth errors (401/403) to avoid retry loops
+        if (!tr.result.success && /\b(401|403)\b/.test(tr.result.message)) {
+          hasAuthError = true;
+        }
+
         this.conversations.addMessage(sessionId, {
           role: 'tool',
           content: JSON.stringify(tr.result),
           toolCallId: tr.toolCallId,
         });
+      }
+
+      // If all tool calls failed with auth errors, stop looping — retrying won't help
+      if (hasAuthError && toolResults.every(tr => !tr.result.success)) {
+        const failedPlugins = [...new Set(response.toolCalls.map(tc => tc.pluginName))];
+        const text = `Authentication failed for ${failedPlugins.join(', ')}. Please set up credentials first (e.g. \`agentbridge connect ${failedPlugins[0]}\` for OAuth APIs, or \`agentbridge auth ${failedPlugins[0]} --token YOUR_TOKEN\` for token-based APIs).`;
+        this.conversations.addMessage(sessionId, {
+          role: 'assistant',
+          content: text,
+        });
+        return text;
       }
 
       // Loop back so the LLM can process the tool results

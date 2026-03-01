@@ -1,6 +1,6 @@
 {
   "name": "@agentbridgeai/mcp",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "MCP server that exposes any AgentBridge-registered API as tools for Claude, Cursor, Windsurf, etc.",
   "type": "module",
   "main": "./dist/index.js",
@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@agentbridgeai/core": "^0.1.4",
-    "@agentbridgeai/openapi": "^0.1.6",
+    "@agentbridgeai/openapi": "^0.1.8",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.23.0",
     "yaml": "^2.6.0"

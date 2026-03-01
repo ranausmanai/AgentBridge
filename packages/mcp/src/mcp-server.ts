@@ -2,6 +2,7 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { AgentBridgeManifest, ManifestAction } from '@agentbridgeai/openapi';
 import { manifestToMCPTools } from './manifest-to-mcp.js';
+import { z } from 'zod';
 
 export interface MCPServerOptions {
   manifests: AgentBridgeManifest[];
@@ -26,23 +27,31 @@ export function createMCPServer(options: MCPServerOptions) {
     for (const action of manifest.actions) {
       const toolName = `${manifest.name}__${action.id}`;
 
-      // Build parameter shape for the tool
-      const paramShape: Record<string, any> = {};
+      // Build Zod parameter schema for the tool
+      const paramShape: Record<string, z.ZodTypeAny> = {};
       for (const param of action.parameters) {
-        const schemaType = param.type === 'integer' ? 'number' : param.type;
-        const schema: Record<string, any> = {
-          type: schemaType === 'object' ? 'object' : schemaType === 'array' ? 'array' : schemaType === 'boolean' ? 'boolean' : schemaType === 'number' ? 'number' : 'string',
-          description: param.description,
-        };
-        if (schema.type === 'array') {
-          schema.items = { type: 'string' };
+        let field: z.ZodTypeAny;
+        switch (param.type) {
+          case 'number':
+          case 'integer':
+            field = z.number().describe(param.description);
+            break;
+          case 'boolean':
+            field = z.boolean().describe(param.description);
+            break;
+          case 'array':
+            field = z.array(z.any()).describe(param.description);
+            break;
+          case 'object':
+            field = z.record(z.any()).describe(param.description);
+            break;
+          default:
+            field = z.string().describe(param.description);
         }
-        if (schema.type === 'object') {
-          schema.additionalProperties = true;
+        if (!param.required) {
+          field = field.optional();
         }
-        paramShape[param.name] = {
-          ...schema,
-        };
+        paramShape[param.name] = field;
       }
 
       server.tool(

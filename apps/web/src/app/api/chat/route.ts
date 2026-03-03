@@ -5,7 +5,28 @@ import type { AgentBridgeManifest } from '@agentbridgeai/openapi';
 import { attachOwnerCookie, resolveRequestOwner } from '@/lib/auth';
 
 // Store sessions in memory (per-server instance)
-const sessions = new Map<string, { engineSessionId: string; engine: any }>();
+const sessions = new Map<string, {
+  engineSessionId: string;
+  engine: any;
+  apisKey: string;
+  provider: string;
+  model?: string;
+  credentialsHash: string;
+}>();
+
+function stableStringify(value: any): string {
+  if (value === null || value === undefined) return String(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function fingerprintCredentials(creds: Record<string, Record<string, string>>): string {
+  return stableStringify(creds);
+}
 
 export async function POST(request: Request) {
   let owner: Awaited<ReturnType<typeof resolveRequestOwner>> = null;
@@ -84,6 +105,9 @@ export async function POST(request: Request) {
       }
     }
 
+    const apisKey = [...apis].sort().join(',');
+    const credentialsHash = fingerprintCredentials(mergedCredentials);
+
     // Reuse or create session
     let session = sessionId ? sessions.get(sessionId) : undefined;
 
@@ -91,7 +115,14 @@ export async function POST(request: Request) {
       const engine = createEngine(llmProvider ?? 'openai', llmKey, manifests, llmModel, mergedCredentials);
       const engineSessionId = engine.createSession();
       const newSessionId = crypto.randomUUID();
-      session = { engineSessionId, engine };
+      session = {
+        engineSessionId,
+        engine,
+        apisKey,
+        provider: llmProvider ?? 'openai',
+        model: llmModel,
+        credentialsHash,
+      };
       sessions.set(newSessionId, session);
 
       // Clean up old sessions (keep max 100)
@@ -125,6 +156,27 @@ export async function POST(request: Request) {
       };
       const jsonResponse = NextResponse.json(responsePayload);
       return attachOwnerCookie(jsonResponse, owner);
+    }
+
+    // Rebuild session engine if selected APIs, provider/model, or credentials changed.
+    // This avoids stale OAuth/token usage after reconnect.
+    if (
+      session.apisKey !== apisKey
+      || session.provider !== (llmProvider ?? 'openai')
+      || session.model !== llmModel
+      || session.credentialsHash !== credentialsHash
+    ) {
+      const engine = createEngine(llmProvider ?? 'openai', llmKey, manifests, llmModel, mergedCredentials);
+      const engineSessionId = engine.createSession();
+      session = {
+        engineSessionId,
+        engine,
+        apisKey,
+        provider: llmProvider ?? 'openai',
+        model: llmModel,
+        credentialsHash,
+      };
+      if (sessionId) sessions.set(sessionId, session);
     }
 
     const toolCalls: { action: string; params: any }[] = [];

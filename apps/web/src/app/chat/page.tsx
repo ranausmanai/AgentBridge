@@ -191,6 +191,8 @@ export default function ChatPage() {
           clearInterval(poll);
           setOauthConnectingApi('');
           setOauthNotice(`OAuth connected for ${apiName}.`);
+          // Force next chat turn to create a fresh server session with updated OAuth credentials.
+          setSessionId(undefined);
           setCredentialStatus(prev => ({ ...prev, [apiName]: status }));
           if (!popup.closed) popup.close();
         } else if (popup.closed) {

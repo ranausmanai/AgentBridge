@@ -30,6 +30,7 @@ export async function GET(request: Request) {
   const apiName = url.searchParams.get('api');
   const scope = url.searchParams.get('scope');
   const format = (url.searchParams.get('format') || '').toLowerCase();
+  const force = ['1', 'true', 'yes'].includes((url.searchParams.get('force') || '').toLowerCase());
 
   if (!apiName) {
     return NextResponse.json({ error: 'api is required' }, { status: 400 });
@@ -70,6 +71,11 @@ export async function GET(request: Request) {
 
   const finalScopes = buildScopes(manifest, scope);
   if (finalScopes) authUrl.searchParams.set('scope', finalScopes);
+  if (force) {
+    // Force provider consent so newly requested scopes are actually granted.
+    if (apiName === 'spotify') authUrl.searchParams.set('show_dialog', 'true');
+    if (authUrl.hostname.includes('accounts.google.com')) authUrl.searchParams.set('prompt', 'consent');
+  }
 
   if (format === 'json') {
     const response = NextResponse.json({

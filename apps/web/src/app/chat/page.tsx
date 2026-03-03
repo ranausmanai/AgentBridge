@@ -159,6 +159,8 @@ export default function ChatPage() {
     setOauthError('');
     setOauthNotice('');
     setOauthConnectingApi(apiName);
+    const previous = credentialStatus[apiName];
+    const previousUpdatedAt = previous?.updatedAt;
     try {
       if (!useBuiltinDefaults) {
         const secret = oauthClientSecrets[apiName]?.trim();
@@ -174,7 +176,7 @@ export default function ChatPage() {
           }),
         });
       }
-      const oauthUrl = `/api/oauth/start?api=${encodeURIComponent(apiName)}`;
+      const oauthUrl = `/api/oauth/start?api=${encodeURIComponent(apiName)}&force=1`;
       const popup = window.open(oauthUrl, '_blank', 'noopener');
       if (!popup) {
         window.location.href = oauthUrl;
@@ -183,11 +185,17 @@ export default function ChatPage() {
       const poll = setInterval(async () => {
         const res = await fetch(`/api/credentials?apis=${encodeURIComponent(apiName)}`);
         const data = await res.json();
-        if (data.statuses?.[apiName]?.oauthConnected) {
+        const status = data.statuses?.[apiName];
+        const hasFreshUpdate = !previousUpdatedAt || (status?.updatedAt && status.updatedAt !== previousUpdatedAt);
+        if (status?.oauthConnected && hasFreshUpdate) {
           clearInterval(poll);
           setOauthConnectingApi('');
           setOauthNotice(`OAuth connected for ${apiName}.`);
-          setCredentialStatus(prev => ({ ...prev, [apiName]: data.statuses[apiName] }));
+          setCredentialStatus(prev => ({ ...prev, [apiName]: status }));
+          if (!popup.closed) popup.close();
+        } else if (popup.closed) {
+          clearInterval(poll);
+          setOauthConnectingApi('');
         }
       }, 2000);
       setTimeout(() => clearInterval(poll), 300000);

@@ -50,6 +50,7 @@ export default function ChatPage() {
   const [oauthConnectingApi, setOauthConnectingApi] = useState('');
   const [configured, setConfigured] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const oauthInFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetch('/api/apis').then(r => r.json()).then((data) => {
@@ -151,9 +152,11 @@ export default function ChatPage() {
   }
 
   async function connectOAuth(apiName: string, useBuiltinDefaults?: boolean) {
-    if (oauthConnectingApi === apiName) return;
+    if (oauthConnectingApi === apiName || oauthInFlightRef.current.has(apiName)) return;
+    oauthInFlightRef.current.add(apiName);
     const clientId = oauthClientIds[apiName]?.trim();
     if (!useBuiltinDefaults && !clientId) {
+      oauthInFlightRef.current.delete(apiName);
       setOauthError(`Enter client ID for ${apiName} first.`);
       return;
     }
@@ -178,11 +181,15 @@ export default function ChatPage() {
         });
       }
       const oauthUrl = `/api/oauth/start?api=${encodeURIComponent(apiName)}&force=1`;
-      const popup = window.open(oauthUrl, 'agentbridge-oauth', 'noopener');
+      // Open a named popup window first, then set location. This avoids
+      // cross-browser `null` return quirks that can trigger duplicate tabs.
+      const popup = window.open('', 'agentbridge-oauth', 'width=560,height=760');
       if (!popup) {
+        oauthInFlightRef.current.delete(apiName);
         window.location.href = oauthUrl;
         return;
       }
+      popup.location.href = oauthUrl;
       const poll = setInterval(async () => {
         const res = await fetch(`/api/credentials?apis=${encodeURIComponent(apiName)}`);
         const data = await res.json();
@@ -191,6 +198,7 @@ export default function ChatPage() {
         if (status?.oauthConnected && hasFreshUpdate) {
           clearInterval(poll);
           setOauthConnectingApi('');
+          oauthInFlightRef.current.delete(apiName);
           setOauthNotice(`OAuth connected for ${apiName}.`);
           // Force next chat turn to create a fresh server session with updated OAuth credentials.
           setSessionId(undefined);
@@ -199,11 +207,16 @@ export default function ChatPage() {
         } else if (popup.closed) {
           clearInterval(poll);
           setOauthConnectingApi('');
+          oauthInFlightRef.current.delete(apiName);
         }
       }, 2000);
-      setTimeout(() => clearInterval(poll), 300000);
+      setTimeout(() => {
+        clearInterval(poll);
+        oauthInFlightRef.current.delete(apiName);
+      }, 300000);
     } catch {
       setOauthConnectingApi('');
+      oauthInFlightRef.current.delete(apiName);
     }
   }
 

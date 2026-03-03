@@ -21,8 +21,10 @@ export function createEngine(
         const originalExecute = createPlaylist.execute;
         createPlaylist.execute = async (params, context) => {
           const result = await originalExecute(params, context);
-          const requestedPublic = params?.public === true || params?.public === 'true';
-          if (!requestedPublic || result.success || !result.message.includes('API returned 403')) {
+          const requestedPublic = params?.public === undefined
+            ? true
+            : params?.public === true || params?.public === 'true';
+          if (result.success || !result.message.includes('API returned 403')) {
             return result;
           }
 
@@ -30,20 +32,25 @@ export function createEngine(
             ? credentials.oauth.scope
             : '';
           const scopes = scopeText.split(/\s+/).filter(Boolean);
+          const neededScope = requestedPublic ? 'playlist-modify-public' : 'playlist-modify-private';
+          const hasNeededScope = scopes.includes(neededScope);
           const hasPublicScope = scopes.includes('playlist-modify-public');
           const hasPrivateScope = scopes.includes('playlist-modify-private');
+          const insufficientScope = String(result.message).toLowerCase().includes('insufficient client scope');
 
           const grantedScopes = scopes.length > 0 ? scopes.join(', ') : 'unknown';
-          const reason = hasPublicScope
-            ? 'Token includes playlist-modify-public, so Spotify is rejecting public playlist creation at account/app policy level.'
-            : 'Token likely missing playlist-modify-public.';
-          const next = hasPrivateScope
-            ? 'Try creating a private playlist, then make it public in Spotify app.'
-            : 'Reconnect Spotify and grant playlist-modify-public and playlist-modify-private scopes.';
+          const reason = insufficientScope
+            ? `Spotify returned "Insufficient client scope" for required scope ${neededScope}.`
+            : hasNeededScope
+              ? `Token includes ${neededScope}, so Spotify is rejecting creation at account/app policy level.`
+              : `Token likely missing ${neededScope}.`;
+          const next = hasPublicScope && hasPrivateScope
+            ? 'Reconnect Spotify (force consent) once, then retry. If it still fails, check Spotify app mode/user access.'
+            : `Reconnect Spotify and grant both playlist-modify-public and playlist-modify-private scopes.`;
 
           return {
             ...result,
-            message: `${result.message}\n\nSpotify diagnostics:\n- requested public: true\n- granted scopes: ${grantedScopes}\n- ${reason}\n- Next step: ${next}`,
+            message: `${result.message}\n\nSpotify diagnostics:\n- requested public: ${requestedPublic}\n- required scope: ${neededScope}\n- granted scopes: ${grantedScopes}\n- ${reason}\n- Next step: ${next}`,
           };
         };
       }

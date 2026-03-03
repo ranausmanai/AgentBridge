@@ -7,7 +7,7 @@ export const spotifyManifest: AgentBridgeManifest = {
   schema_version: '1.0',
   name: 'spotify',
   description: 'Spotify Web API — search music, control playback, manage playlists and library',
-  version: '1.0.0',
+  version: '1.0.1',
   logo_url: 'https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green.png',
   base_url: 'https://api.spotify.com/v1',
   auth: {
@@ -84,12 +84,11 @@ export const spotifyManifest: AgentBridgeManifest = {
     },
     {
       id: 'create_playlist',
-      description: 'Create a playlist for a Spotify user',
+      description: 'Create a playlist for the current Spotify user',
       method: 'POST',
-      path: '/users/{user_id}/playlists',
+      path: '/me/playlists',
       confirm: true,
       parameters: [
-        { name: 'user_id', description: 'The Spotify user ID', in: 'path', required: true, type: 'string' },
         { name: 'name', description: 'Playlist name', in: 'body', required: true, type: 'string' },
         { name: 'description', description: 'Playlist description', in: 'body', required: false, type: 'string' },
         { name: 'public', description: 'Whether the playlist is public', in: 'body', required: false, type: 'boolean' },
@@ -108,7 +107,7 @@ export const spotifyManifest: AgentBridgeManifest = {
       id: 'get_playlist_tracks',
       description: 'Get tracks in a Spotify playlist',
       method: 'GET',
-      path: '/playlists/{playlist_id}/tracks',
+      path: '/playlists/{playlist_id}/items',
       parameters: [
         { name: 'playlist_id', description: 'The Spotify playlist ID', in: 'path', required: true, type: 'string' },
         { name: 'limit', description: 'Max results (1-100)', in: 'query', required: false, type: 'integer', default: 100 },
@@ -119,7 +118,7 @@ export const spotifyManifest: AgentBridgeManifest = {
       id: 'add_tracks_to_playlist',
       description: 'Add one or more tracks to a playlist',
       method: 'POST',
-      path: '/playlists/{playlist_id}/tracks',
+      path: '/playlists/{playlist_id}/items',
       confirm: true,
       parameters: [
         { name: 'playlist_id', description: 'The Spotify playlist ID', in: 'path', required: true, type: 'string' },
@@ -131,11 +130,11 @@ export const spotifyManifest: AgentBridgeManifest = {
       id: 'remove_tracks_from_playlist',
       description: 'Remove one or more tracks from a playlist',
       method: 'DELETE',
-      path: '/playlists/{playlist_id}/tracks',
+      path: '/playlists/{playlist_id}/items',
       confirm: true,
       parameters: [
         { name: 'playlist_id', description: 'The Spotify playlist ID', in: 'path', required: true, type: 'string' },
-        { name: 'tracks', description: 'Array of objects with uri field (e.g. [{uri: "spotify:track:..."}])', in: 'body', required: true, type: 'array' },
+        { name: 'items', description: 'Array of objects with uri field (e.g. [{uri: "spotify:track:..."}])', in: 'body', required: true, type: 'array' },
       ],
     },
     {
@@ -218,20 +217,20 @@ export const spotifyManifest: AgentBridgeManifest = {
       id: 'save_tracks',
       description: 'Save (like) one or more tracks to the user\'s library',
       method: 'PUT',
-      path: '/me/tracks',
+      path: '/me/library',
       confirm: true,
       parameters: [
-        { name: 'ids', description: 'Comma-separated list of Spotify track IDs', in: 'query', required: true, type: 'string' },
+        { name: 'uris', description: 'Comma-separated list of Spotify track URIs', in: 'query', required: true, type: 'string' },
       ],
     },
     {
       id: 'remove_saved_tracks',
       description: 'Remove one or more tracks from the user\'s saved library',
       method: 'DELETE',
-      path: '/me/tracks',
+      path: '/me/library',
       confirm: true,
       parameters: [
-        { name: 'ids', description: 'Comma-separated list of Spotify track IDs', in: 'query', required: true, type: 'string' },
+        { name: 'uris', description: 'Comma-separated list of Spotify track URIs', in: 'query', required: true, type: 'string' },
       ],
     },
     {

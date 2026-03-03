@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       llmKey: string;
       llmModel?: string;
       sessionId?: string;
-      apiCredentials?: Record<string, Record<string, string>>;
+      apiCredentials?: Record<string, Record<string, any>>;
     };
 
     if (!message) {
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     }
 
     const storedCredentials = getApiCredentials(owner.ownerId, apis);
-    const mergedCredentials: Record<string, Record<string, string>> = {};
+    const mergedCredentials: Record<string, Record<string, any>> = {};
 
     for (const apiName of apis) {
       const fromStored = storedCredentials[apiName]?.credentials ?? {};
@@ -97,10 +97,12 @@ export async function POST(request: Request) {
         oauth.access_token;
       const apiKey = fromBody.api_key || fromStored.api_key || token;
 
-      if (token || apiKey) {
+      if (token || apiKey || Object.keys(oauth).length > 0) {
         mergedCredentials[apiName] = {
           ...(token ? { token: String(token) } : {}),
           ...(apiKey ? { api_key: String(apiKey) } : {}),
+          ...(Object.keys(oauth).length > 0 ? { oauth } : {}),
+          ...(fromStored.oauth_client_id ? { oauth_client_id: String(fromStored.oauth_client_id) } : {}),
         };
       }
     }

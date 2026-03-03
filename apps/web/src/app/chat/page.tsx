@@ -151,6 +151,7 @@ export default function ChatPage() {
   }
 
   async function connectOAuth(apiName: string, useBuiltinDefaults?: boolean) {
+    if (oauthConnectingApi === apiName) return;
     const clientId = oauthClientIds[apiName]?.trim();
     if (!useBuiltinDefaults && !clientId) {
       setOauthError(`Enter client ID for ${apiName} first.`);
@@ -177,7 +178,7 @@ export default function ChatPage() {
         });
       }
       const oauthUrl = `/api/oauth/start?api=${encodeURIComponent(apiName)}&force=1`;
-      const popup = window.open(oauthUrl, '_blank', 'noopener');
+      const popup = window.open(oauthUrl, 'agentbridge-oauth', 'noopener');
       if (!popup) {
         window.location.href = oauthUrl;
         return;

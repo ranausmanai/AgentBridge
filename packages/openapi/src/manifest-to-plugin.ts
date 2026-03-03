@@ -74,42 +74,35 @@ function createAction(
           }
         }
 
-        // Spotify convenience: if user_id path param is missing/placeholder for create playlist,
-        // resolve current user id via /me so the model does not need to guess it.
+        // Spotify safety: for create_playlist always resolve the real current user id via /me.
+        // This prevents model-provided/malformed user_id from causing 403 "cannot create for this user".
         if (
           manifest.name === 'spotify' &&
           action.id === 'create_playlist' &&
           action.path.includes('{user_id}')
         ) {
-          const rawUserId = String(resolvedParams.user_id ?? '').trim();
-          const placeholderLike = !rawUserId
-            || rawUserId === 'user_id'
-            || rawUserId === 'current_user'
-            || rawUserId.startsWith('<');
-          if (placeholderLike) {
-            const meRes = await fetchFn(`${manifest.base_url}/me`, {
-              method: 'GET',
-              headers: {
-                Accept: 'application/json',
-                ...(headers['Authorization'] ? { Authorization: headers['Authorization'] } : {}),
-              },
-            });
-            const meText = await meRes.text();
-            let meJson: any = null;
-            try {
-              meJson = meText ? JSON.parse(meText) : null;
-            } catch {
-              meJson = null;
-            }
-            if (!meRes.ok || !meJson?.id) {
-              return {
-                success: false,
-                message: `Unable to resolve Spotify user_id automatically: ${typeof meJson === 'string' ? meJson : JSON.stringify(meJson ?? { status: meRes.status }).slice(0, 200)}`,
-                data: meJson ?? meText,
-              };
-            }
-            resolvedParams.user_id = meJson.id;
+          const meRes = await fetchFn(`${manifest.base_url}/me`, {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              ...(headers['Authorization'] ? { Authorization: headers['Authorization'] } : {}),
+            },
+          });
+          const meText = await meRes.text();
+          let meJson: any = null;
+          try {
+            meJson = meText ? JSON.parse(meText) : null;
+          } catch {
+            meJson = null;
           }
+          if (!meRes.ok || !meJson?.id) {
+            return {
+              success: false,
+              message: `Unable to resolve Spotify user_id automatically: ${typeof meJson === 'string' ? meJson : JSON.stringify(meJson ?? { status: meRes.status }).slice(0, 200)}`,
+              data: meJson ?? meText,
+            };
+          }
+          resolvedParams.user_id = meJson.id;
         }
 
         // Distribute params to path, query, header, body

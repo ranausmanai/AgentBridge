@@ -72,6 +72,10 @@ npx @agentbridgeai/mcp --help
 npx agentbridge chat spotify
 # → Searches the directory, installs, starts chatting
 # → "play some jazz music"
+
+# Built-in RevenueCat preset (token required)
+npx agentbridge chat revenuecat
+# → "list my projects"
 ```
 
 ### One command to make your API agent-ready
@@ -146,6 +150,7 @@ Recommended onboarding (installs API, handles auth, configures clients, health-c
 # Works for OAuth + token APIs
 agentbridge mcp setup spotify
 agentbridge mcp setup gmail
+agentbridge mcp setup revenuecat --token sk_...
 agentbridge mcp setup extractly-api
 ```
 

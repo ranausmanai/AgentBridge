@@ -72,8 +72,8 @@ importers:
         specifier: ^0.1.6
         version: 0.1.6(ws@8.19.0)(zod@3.25.76)
       '@agentbridgeai/openapi':
-        specifier: ^0.1.7
-        version: 0.1.7
+        specifier: ^0.1.9
+        version: 0.1.9
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -138,8 +138,8 @@ importers:
         specifier: ^0.1.4
         version: 0.1.4
       '@agentbridgeai/openapi':
-        specifier: ^0.1.6
-        version: 0.1.6
+        specifier: ^0.1.9
+        version: 0.1.9
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.27.1(zod@3.25.76)
@@ -241,11 +241,8 @@ packages:
   '@agentbridgeai/llm@0.1.6':
     resolution: {integrity: sha512-DdQdgBNhPtXnygmHE2+oO8ycv+MhgYhmpxmoIVg+QymZfs/szuGuOz42pEYlOSosOhOAvo1RNnznsTQjYUNfkg==}
 
-  '@agentbridgeai/openapi@0.1.6':
-    resolution: {integrity: sha512-+ZTJMX5KKVNXdQfNdn53dk67l8bqT1N+7GBeHmXoN9rKEMOGP2MXftZqagrC6EBuYAoj3iLpQmsF5X7Rx1T2bg==}
-
-  '@agentbridgeai/openapi@0.1.7':
-    resolution: {integrity: sha512-+HgpaHeZPIIteT70Okhea6Qophpx0bY4o/AJOxUiYvLYl4grqUjsx+q/tAQXjN7TAdmp+lbY3HRmUra3INnayA==}
+  '@agentbridgeai/openapi@0.1.9':
+    resolution: {integrity: sha512-QQtNk58RmyNe29yxHWNBWf8sJ8ZhWgLs0srN9sbAfd3xmcavlV7eLD70euLVW8DcbXO1REqvbmLByJ/oNFHLQA==}
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -1529,15 +1526,9 @@ snapshots:
       - ws
       - zod
 
-  '@agentbridgeai/openapi@0.1.6':
+  '@agentbridgeai/openapi@0.1.9':
     dependencies:
-      '@agentbridgeai/core': 0.1.4
-      yaml: 2.8.2
-      zod: 3.25.76
-
-  '@agentbridgeai/openapi@0.1.7':
-    dependencies:
-      '@agentbridgeai/core': link:packages/core
+      '@agentbridgeai/core': 0.1.5
       yaml: 2.8.2
       zod: 3.25.76
 

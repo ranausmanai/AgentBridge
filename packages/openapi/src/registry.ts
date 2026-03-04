@@ -92,7 +92,14 @@ export class APIRegistry {
    * Set credentials for a registered API.
    */
   setCredentials(name: string, credentials: Record<string, any>): void {
-    const entry = this.data.entries[name];
+    let entry = this.data.entries[name];
+    if (!entry) {
+      // Auto-resolve built-ins/aliases on first credential set.
+      const manifest = this.getManifest(name);
+      if (manifest) {
+        entry = this.data.entries[manifest.name];
+      }
+    }
     if (!entry) throw new Error(`API "${name}" not found in registry`);
     entry.credentials = credentials;
     this.save();

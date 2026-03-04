@@ -3,6 +3,7 @@ import { spotifyManifest, SPOTIFY_CLIENT_ID, SPOTIFY_CLI_CALLBACK_PORT } from '.
 import { gmailManifest } from './gmail.js';
 import { googleCalendarManifest } from './google-calendar.js';
 import { GOOGLE_CLIENT_ID, GOOGLE_CLI_CALLBACK_PORT } from './google-oauth.js';
+import { revenuecatManifest } from './revenuecat.js';
 
 export interface BuiltinApi {
   manifest: AgentBridgeManifest;
@@ -29,6 +30,12 @@ const BUILTINS: Record<string, BuiltinApi> = {
     manifest: googleCalendarManifest,
     oauthClientId: GOOGLE_CLIENT_ID,
     cliCallbackPort: GOOGLE_CLI_CALLBACK_PORT,
+  },
+  revenuecat: {
+    manifest: revenuecatManifest,
+  },
+  'developer-api': {
+    manifest: revenuecatManifest,
   },
 };
 
